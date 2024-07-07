@@ -1,0 +1,7 @@
+__pycache__
+lib
+bin
+share
+include
+*.cfg
+.DS_Store
