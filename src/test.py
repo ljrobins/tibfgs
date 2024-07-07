@@ -35,14 +35,11 @@ def test_wolfe1():
     f = rosen_np
 
     from .spbfgs import line_search_wolfe1
-    myfprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-6)
+    myfprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-4)
 
     alpha_k, fc, gc, _old_fval, _old_old_fval, gfkp1 = line_search_wolfe1(f=f, fprime=myfprime, xk=np.array(xkl), 
     pk=np.array(pkl), gfk=np.array(gfkl), old_fval=old_fval, old_old_fval=old_old_fval, amin=1e-100,
                                           amax=1e100, c1=1e-4, c2=0.9)
-
-    # print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
-    # enddd
 
     from .tibfgs import line_search_wolfe1 as ti_line_search_wolfe1
 
@@ -86,7 +83,7 @@ def test_dcsearch():
     (ftol, gtol, xtol, stpmin, stpmax) = (0.0001, 0.9, 1e-14, 1e-10, 1e+10)
 
     f = rosen_np
-    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-6)
+    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-4)
 
     gfk = fprime(x0)
 
@@ -107,27 +104,23 @@ def test_dcsearch():
         return np.dot(gval[0], pk)
 
     alpha1, phi0, derphi0, maxiter = 0.2525377248993902, 4.0, -15.99522009389491, 100
-    stp, phi1, phi0, task = DCSRCH_np(phi, derphi, ftol, gtol, xtol, stpmin, stpmax)(
+    tup_sp = DCSRCH_np(phi, derphi, ftol, gtol, xtol, stpmin, stpmax)(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter
     )
-    print('step results np')
-    print(stp, phi1, phi0, task)
+    tup_sp = np.array([*tup_sp[:3], 4.0])
 
     @ti.kernel
-    def run_ti_dcsrch():
+    def run_ti_dcsrch() -> ti.types.vector(4, ti.f32):
         stp: ti.f32 = 0.0
         phi1: ti.f32 = 0.0
-        phi0: ti.f32 = 0.0
+        phi0: ti.f32 = 4.0
         task: ti.u8 = 0
-        for _ in range(1):
-            stp, phi1, phi0, task = DCSRCH_ti(VTYPE(xk), VTYPE(pk), ftol, gtol, xtol, stpmin, stpmax, i=0).call(
-                alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter
-            )
-        print(stp, phi1, phi0, task)
-        # return stp, phi1, phi0, task
+        x = ti.Vector(DCSRCH_ti(VTYPE(xk), VTYPE(pk), ftol, gtol, xtol, stpmin, stpmax, i=0).call(
+            alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter
+        ))
+        return x
     
-    tup_ti = run_ti_dcsrch()
-    print(tup_ti)
+    tup_ti = run_ti_dcsrch().to_numpy()
 
-    # for x,y in zip(tup_sp, tup_ti):
-    #     assert np.allclose(x,y)
+    for x,y in zip(tup_sp, tup_ti):
+        assert np.allclose(x,y, atol=1e-4)

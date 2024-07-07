@@ -113,9 +113,9 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
                      line_search_wolfe1(f, myfprime, xk, pk, gfk,
                                           old_fval, old_old_fval, amin=1e-100,
                                           amax=1e100, c1=c1, c2=c2)
-            if k == 0:
-                print(xk, pk, gfk, old_fval, old_old_fval)
-                print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
+            # if k == 0:
+            #     print(xk, pk, gfk, old_fval, old_old_fval)
+            #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
         except _LineSearchError:
             # Line search failed to find a better solution.
             warnflag = 2

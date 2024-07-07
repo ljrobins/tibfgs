@@ -1,7 +1,7 @@
 import taichi as ti
 from typing import Callable
 
-ti.init(arch=ti.cpu, offline_cache=False)
+ti.init(arch=ti.cpu)
 
 
 f = None
@@ -162,17 +162,12 @@ def scalar_search_wolfe1(i: int,
     else:
         alpha1 = 1.0
     
-    print(derphi0)
-    print(alpha1)
-    print(f'{phi0=}, {old_phi0=}, {derphi0=}, {alpha1=}')
-
     dcsrch = DCSRCH(phi, derphi, c1, c2, xtol, amin, amax)
     stp, phi1, phi0, task = dcsrch(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=100
     )
-    return 0, 0, 0
 
-    # return stp, phi1, phi0
+    return stp, phi1, phi0
 
 @ti.func
 def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
@@ -259,27 +254,37 @@ class DCSRCH:
         derphi1: ti.f32= derphi0
 
         task: ti.u8 = TASK_START
-        broken = False
+        inf_stp = False
+        max_iter_hit = False
         stp: ti.f32 = 0.0
-        for _ in range(maxiter):
-            stp, phi1, derphi1, task = self.iterate(
-                alpha1, phi1, derphi1, task
-            )
-            
-            if not ti.math.isinf(stp):
-                broken: ti.u1 = True
-                break
 
-            if task == TASK_FG:
-                alpha1 = stp
-                phi1 = phi(self.i, self.xk, self.pk, stp)
-                derphi1 = derphi(self.i, self.xk, self.pk, stp)
-            else:
-                broken = True
-                break
-        if broken:
+        for _ in range(1): # because it won't let me break in the outermost loop, dumb
+            for j in range(maxiter):
+                stp, phi1, derphi1, task = self.iterate(
+                    alpha1, phi1, derphi1, task
+                )
+                
+                if ti.math.isinf(ti.abs(stp)):
+                    inf_stp: ti.u1 = True
+                    break
+
+                if task == TASK_FG:
+                    alpha1 = stp
+                    phi1 = phi(self.i, self.xk, self.pk, stp)
+                    derphi1 = derphi(self.i, self.xk, self.pk, stp)
+                else:
+                    break
+
+                if j == maxiter-1:
+                    max_iter_hit = True
+
             # maxiter reached, the line search did not converge
-            task = TASK_WARNING
+            if max_iter_hit:
+                print('max iter')
+                task = TASK_WARNING
+            elif inf_stp:
+                print('inf stp')
+                task = TASK_ERROR
 
         return stp, phi1, phi0, task
 
@@ -345,8 +350,9 @@ class DCSRCH:
                 self.stmin = 0
                 self.stmax = stp + xtrapu * stp
                 task = TASK_FG
+                skip = True
 
-        if task != TASK_FG:
+        if not skip:
             # in the original Fortran this was a location to restore variables
             # we don't need to do that because they're attributes.
 
@@ -360,12 +366,16 @@ class DCSRCH:
             # test for warnings
             if self.brackt and (stp <= self.stmin or stp >= self.stmax):
                 task = TASK_WARNING
+                print('w1')
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
                 task = TASK_WARNING
+                print('w2')
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
                 task = TASK_WARNING
+                print('w3')
             if stp == self.stpmin and (f > ftest or g >= self.gtest):
                 task = TASK_WARNING
+                print('w4')
 
 
             # test for convergence
@@ -394,18 +404,6 @@ class DCSRCH:
                     # dcstep can have several operations which can produce NaN
                     # e.g. inf/inf. Filter these out.
 
-                    print(self.stx, fxm,
-                        gxm,
-                        self.sty,
-                        fym,
-                        gym,
-                        stp,
-                        fm,
-                        gm,
-                        self.brackt,
-                        self.stmin,
-                        self.stmax)
-
                     self.stx, fxm, gxm, self.sty, fym, gym, stp, self.brackt \
                     = dcstep(
                         self.stx,
@@ -422,72 +420,72 @@ class DCSRCH:
                         self.stmax,
                     )
 
-                    # # Reset the function and derivative values for f
-                    # self.fx = fxm + self.stx * self.gtest
-                    # self.fy = fym + self.sty * self.gtest
-                    # self.gx = gxm + self.gtest
-                    # self.gy = gym + self.gtest
+                    # Reset the function and derivative values for f
+                    self.fx = fxm + self.stx * self.gtest
+                    self.fy = fym + self.sty * self.gtest
+                    self.gx = gxm + self.gtest
+                    self.gy = gym + self.gtest
 
-                # else:
+                else:
                     # Call dcstep to update stx, sty, and to compute the new step.
                     # dcstep can have several operations which can produce NaN
                     # e.g. inf/inf. Filter these out.
 
-                        # (self.stx,
-                        # self.fx,
-                        # self.gx,
-                        # self.sty,
-                        # self.fy,
-                        # self.gy,
-                        # stp,
-                        # self.brackt) \
-                        # = dcstep(
-                        #     self.stx,
-                        #     self.fx,
-                        #     self.gx,
-                        #     self.sty,
-                        #     self.fy,
-                        #     self.gy,
-                        #     stp,
-                        #     f,
-                        #     g,
-                        #     self.brackt,
-                        #     self.stmin,
-                        #     self.stmax,
-                        # )
+                        (self.stx,
+                        self.fx,
+                        self.gx,
+                        self.sty,
+                        self.fy,
+                        self.gy,
+                        stp,
+                        self.brackt) \
+                        = dcstep(
+                            self.stx,
+                            self.fx,
+                            self.gx,
+                            self.sty,
+                            self.fy,
+                            self.gy,
+                            stp,
+                            f,
+                            g,
+                            self.brackt,
+                            self.stmin,
+                            self.stmax,
+                        )
 
                 # Decide if a bisection step is needed
-                # if self.brackt:
-                #     if ti.abs(self.sty - self.stx) >= p66 * self.width1:
-                #         stp = self.stx + p5 * (self.sty - self.stx)
-                #     self.width1 = self.width
-                #     self.width = ti.abs(self.sty - self.stx)
+                if self.brackt:
+                    if ti.abs(self.sty - self.stx) >= p66 * self.width1:
+                        stp = self.stx + p5 * (self.sty - self.stx)
+                    self.width1 = self.width
+                    self.width = ti.abs(self.sty - self.stx)
 
-                # # Set the minimum and maximum steps allowed for stp.
-                # if self.brackt:
-                #     self.stmin = ti.min(self.stx, self.sty)
-                #     self.stmax = ti.max(self.stx, self.sty)
-                # else:
-                #     self.stmin = stp + xtrapl * (stp - self.stx)
-                #     self.stmax = stp + xtrapu * (stp - self.stx)
+                # Set the minimum and maximum steps allowed for stp.
+                if self.brackt:
+                    self.stmin = ti.min(self.stx, self.sty)
+                    self.stmax = ti.max(self.stx, self.sty)
+                else:
+                    self.stmin = stp + xtrapl * (stp - self.stx)
+                    self.stmax = stp + xtrapu * (stp - self.stx)
 
-                # # Force the step to be within the bounds stpmax and stpmin.
-                # stp = clip(stp, self.stpmin, self.stpmax)
+                # Force the step to be within the bounds stpmax and stpmin.
+                stp = clip(stp, self.stpmin, self.stpmax)
 
-                # # If further progress is not possible, let stp be the best
-                # # point obtained during the search.
-                # if (
-                #     self.brackt
-                #     and (stp <= self.stmin or stp >= self.stmax)
-                #     or (
-                #         self.brackt
-                #         and self.stmax - self.stmin <= self.xtol * self.stmax
-                #     )
-                # ):
-                #     stp = self.stx
+                # If further progress is not possible, let stp be the best
+                # point obtained during the search.
+                if (
+                    self.brackt
+                    and (stp <= self.stmin or stp >= self.stmax)
+                    or (
+                        self.brackt
+                        and self.stmax - self.stmin <= self.xtol * self.stmax
+                    )
+                ):
+                    stp = self.stx
 
                 # Obtain another function and derivative
-                # task = TASK_FG
+                task = TASK_FG
         return stp, f, g, task
         
     
@@ -637,8 +635,6 @@ def dcstep(stx: ti.f32,
     dy_ret = dy
 
     if fp > fx:
-        why = 1.0
-        # print(fp, fx, sty, stp, fy, fp, dy, dp)
         sty_ret = stp
         fy_ret = fp
         dy_ret = dp
