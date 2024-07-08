@@ -5,3 +5,5 @@ share
 include
 *.cfg
 .DS_Store
+.lock
+.ruff_cache

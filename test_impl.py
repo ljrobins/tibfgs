@@ -1,18 +1,21 @@
-from src import spbfgs, tibfgs
+import os
+os.environ['TI_DIM_X'] = str(2)
+os.environ['TI_NUM_PARTICLES'] = str(int(1e5))
+import spbfgs, tibfgs
 import numpy as np
 from pprint import pprint
 import taichi as ti
 
-import src
+import tests
 
-src.test_matnorm()
-src.test_vecnorm()
-src.test_fdiff()
-src.test_dcstep()
-# src.test_dcsearch()
-# src.test_scalar_search_wolfe1()
-# src.test_wolfe1()
-src.test_bfgs()
+tests.test_matnorm()
+tests.test_vecnorm()
+tests.test_fdiff()
+tests.test_dcstep()
+# tests.test_dcsearch()
+# tests.test_scalar_search_wolfe1()
+# tests.test_wolfe1()
+tests.test_bfgs()
 
 
 # @ti.dataclass

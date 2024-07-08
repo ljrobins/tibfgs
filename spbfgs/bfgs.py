@@ -1,25 +1,25 @@
 import numpy as np
-from typing import Callable, Literal
+from typing import Callable
 
 _epsilon = np.sqrt(np.finfo(float).eps)
 
-_status_message = {'success': 'Optimization terminated successfully.',
-                   'maxfev': 'Maximum number of function evaluations has '
-                              'been exceeded.',
-                   'maxiter': 'Maximum number of iterations has been '
-                              'exceeded.',
-                   'pr_loss': 'Desired error not necessarily achieved due '
-                              'to precision loss.',
-                   'nan': 'NaN result encountered.',
-                   'out_of_bounds': 'The result is outside of the provided '
-                                    'bounds.'}
+_status_message = {
+    "success": "Optimization terminated successfully.",
+    "maxfev": "Maximum number of function evaluations has " "been exceeded.",
+    "maxiter": "Maximum number of iterations has been " "exceeded.",
+    "pr_loss": "Desired error not necessarily achieved due " "to precision loss.",
+    "nan": "NaN result encountered.",
+    "out_of_bounds": "The result is outside of the provided " "bounds.",
+}
+
 
 class _LineSearchError(RuntimeError):
     pass
 
-def finite_difference_gradient(f: Callable, 
-                               x0: np.ndarray, 
-                               finite_difference_stepsize: float) -> np.ndarray:
+
+def finite_difference_gradient(
+    f: Callable, x0: np.ndarray, finite_difference_stepsize: float
+) -> np.ndarray:
     g = np.zeros_like(x0)
     fx0 = f(x0)
     for pind in range(x0.size):
@@ -28,19 +28,33 @@ def finite_difference_gradient(f: Callable,
         g[pind] = (f(x0 + p) - fx0) / finite_difference_stepsize
     return g
 
+
 def vecnorm(x, ord=2):
     if ord == np.inf:
         return np.amax(np.abs(x))
     elif ord == -np.inf:
         return np.amin(np.abs(x))
     else:
-        return np.sum(np.abs(x)**ord, axis=0)**(1.0 / ord)
+        return np.sum(np.abs(x) ** ord, axis=0) ** (1.0 / ord)
 
-def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
-                   gtol=1e-5, norm=np.inf, eps=1e-7, maxiter=None,
-                   disp=False, return_all=False,
-                   xrtol=0, c1=1e-4, c2=0.9,
-                   hess_inv0=None):
+
+def minimize_bfgs(
+    fun,
+    x0,
+    args=(),
+    jac=None,
+    callback=None,
+    gtol=1e-5,
+    norm=np.inf,
+    eps=1e-7,
+    maxiter=None,
+    disp=False,
+    return_all=False,
+    xrtol=0,
+    c1=1e-4,
+    c2=0.9,
+    hess_inv0=None,
+):
     """
     Minimization of scalar function of one or more variables using the
     BFGS algorithm.
@@ -80,26 +94,27 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         the identity matrix is used.
     """
     retall = return_all
-    
+
     assert x0.ndim == 1
 
     if maxiter is None:
         maxiter = len(x0) * 200
 
     f = fun
-    myfprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=eps)
+    myfprime = lambda x: finite_difference_gradient(
+        f, x, finite_difference_stepsize=eps
+    )
 
     old_fval = f(x0)
     gfk = myfprime(x0)
 
     k = 0
     N = len(x0)
-    I = np.eye(N, dtype=int)
-    Hk = I if hess_inv0 is None else hess_inv0
+    eye = np.eye(N, dtype=int)
+    Hk = eye if hess_inv0 is None else hess_inv0
 
     # Sets the initial step guess to dx ~ 1
     old_old_fval = old_fval + np.linalg.norm(gfk) / 2
-
 
     xk = x0
     if retall:
@@ -109,10 +124,19 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
     while (gnorm > gtol) and (k < maxiter):
         pk = -np.dot(Hk, gfk)
         try:
-            alpha_k, fc, gc, old_fval, old_old_fval, gfkp1 = \
-                     line_search_wolfe1(f, myfprime, xk, pk, gfk,
-                                          old_fval, old_old_fval, amin=1e-10,
-                                          amax=1e10, c1=c1, c2=c2)
+            alpha_k, fc, gc, old_fval, old_old_fval, gfkp1 = line_search_wolfe1(
+                f,
+                myfprime,
+                xk,
+                pk,
+                gfk,
+                old_fval,
+                old_old_fval,
+                amin=1e-10,
+                amax=1e10,
+                c1=c1,
+                c2=c2,
+            )
             # if k == 0:
             #     print(xk, pk, gfk, old_fval, old_old_fval)
             #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
@@ -133,17 +157,16 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         yk = gfkp1 - gfk
         gfk = gfkp1
         k += 1
-        intermediate_result = dict(x=xk, fun=old_fval)
 
         gnorm = vecnorm(gfk, ord=norm)
-        if (gnorm <= gtol):
+        if gnorm <= gtol:
             break
 
         #  See Chapter 5 in  P.E. Frandsen, K. Jonasson, H.B. Nielsen,
         #  O. Tingleff: "Unconstrained Optimization", IMM, DTU.  1999.
         #  These notes are available here:
         #  http://www2.imm.dtu.dk/documents/ftp/publlec.html
-        if (alpha_k*vecnorm(pk) <= xrtol*(xrtol + vecnorm(xk))):
+        if alpha_k * vecnorm(pk) <= xrtol * (xrtol + vecnorm(xk)):
             break
 
         if not np.isfinite(old_fval):
@@ -156,22 +179,20 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         # this was handled in numeric, let it remains for more safety
         # Cryptic comment above is preserved for posterity. Future reader:
         # consider change to condition below proposed in gh-1261/gh-17345.
-        if rhok_inv == 0.:
+        if rhok_inv == 0.0:
             rhok = 1000.0
             if disp:
                 msg = "Divide-by-zero encountered: rhok assumed large"
-                _print_success_message_or_warn(True, msg)
         else:
-            rhok = 1. / rhok_inv
-        
+            rhok = 1.0 / rhok_inv
+
         # if k < 2:
         #     print(sk, yk, rhok)
         #     print(sk.reshape(2,1) @ yk.reshape(1,2) * rhok)
 
-        A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
-        A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
-        Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] *
-                                                 sk[np.newaxis, :])
+        A1 = eye - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
+        A2 = eye - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
+        Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] * sk[np.newaxis, :])
 
         # if k < 2:
         #     print(A1)
@@ -179,28 +200,46 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
     fval = old_fval
 
     if warnflag == 2:
-        msg = _status_message['pr_loss']
+        msg = _status_message["pr_loss"]
     elif k >= maxiter:
         warnflag = 1
-        msg = _status_message['maxiter']
+        msg = _status_message["maxiter"]
     elif np.isnan(gnorm) or np.isnan(fval) or np.isnan(xk).any():
         warnflag = 3
-        msg = _status_message['nan']
+        msg = _status_message["nan"]
     else:
-        msg = _status_message['success']
+        msg = _status_message["success"]
 
-    result = dict(fun=fval, jac=gfk, hess_inv=Hk,
-                            status=warnflag,
-                            success=(warnflag == 0), message=msg, x=xk,
-                            nit=k)
+    result = dict(
+        fun=fval,
+        jac=gfk,
+        hess_inv=Hk,
+        status=warnflag,
+        success=(warnflag == 0),
+        message=msg,
+        x=xk,
+        nit=k,
+    )
     if retall:
-        result['allvecs'] = allvecs
+        result["allvecs"] = allvecs
     return result
 
-def line_search_wolfe1(f, fprime, xk, pk, gfk=None,
-                       old_fval=None, old_old_fval=None,
-                       args=(), c1=1e-4, c2=0.9, amax=50, amin=1e-8,
-                       xtol=1e-14):
+
+def line_search_wolfe1(
+    f,
+    fprime,
+    xk,
+    pk,
+    gfk=None,
+    old_fval=None,
+    old_old_fval=None,
+    args=(),
+    c1=1e-4,
+    c2=0.9,
+    amax=50,
+    amin=1e-8,
+    xtol=1e-14,
+):
     """
     As `scalar_search_wolfe1` but do a line search to direction `pk`
 
@@ -240,25 +279,43 @@ def line_search_wolfe1(f, fprime, xk, pk, gfk=None,
 
     def phi(s):
         fc[0] += 1
-        return f(xk + s*pk)
+        return f(xk + s * pk)
 
     def derphi(s):
-        gval[0] = fprime(xk + s*pk)
+        gval[0] = fprime(xk + s * pk)
         gc[0] += 1
         return np.dot(gval[0], pk)
 
     derphi0 = np.dot(gfk, pk)
 
     stp, fval, old_fval = scalar_search_wolfe1(
-            phi, derphi, old_fval, old_old_fval, derphi0,
-            c1=c1, c2=c2, amax=amax, amin=amin, xtol=xtol)
+        phi,
+        derphi,
+        old_fval,
+        old_old_fval,
+        derphi0,
+        c1=c1,
+        c2=c2,
+        amax=amax,
+        amin=amin,
+        xtol=xtol,
+    )
 
     return stp, fc[0], gc[0], fval, old_fval, gval[0]
 
 
-def scalar_search_wolfe1(phi, derphi, phi0, old_phi0, derphi0,
-                         c1=1e-4, c2=0.9,
-                         amax=50, amin=1e-8, xtol=1e-14):
+def scalar_search_wolfe1(
+    phi,
+    derphi,
+    phi0,
+    old_phi0,
+    derphi0,
+    c1=1e-4,
+    c2=0.9,
+    amax=50,
+    amin=1e-8,
+    xtol=1e-14,
+):
     """
     Scalar function search for alpha that satisfies strong Wolfe conditions
 
@@ -298,7 +355,7 @@ def scalar_search_wolfe1(phi, derphi, phi0, old_phi0, derphi0,
     assert (c1 > 0) & (c1 < c2) & (c2 < 1)
 
     if old_phi0 is not None and derphi0 != 0:
-        alpha1 = min(1.0, 1.01*2*(phi0 - old_phi0)/derphi0)
+        alpha1 = min(1.0, 1.01 * 2 * (phi0 - old_phi0) / derphi0)
         if alpha1 < 0:
             alpha1 = 1.0
     else:
@@ -308,14 +365,13 @@ def scalar_search_wolfe1(phi, derphi, phi0, old_phi0, derphi0,
 
     dcsrch = DCSRCH(phi, derphi, c1, c2, xtol, amin, amax)
 
-    stp, phi1, phi0, task = dcsrch(
-        alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter
-    )
+    stp, phi1, phi0, task = dcsrch(alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter)
 
-    if task[:4] != b'CONV':
+    if task[:4] != b"CONV":
         raise _LineSearchError()
 
     return stp, phi1, phi0
+
 
 class DCSRCH:
     """
@@ -543,10 +599,8 @@ class DCSRCH:
         derphi1 = derphi0
 
         task = b"START"
-        for i in range(maxiter):
-            stp, phi1, derphi1, task = self._iterate(
-                alpha1, phi1, derphi1, task
-            )
+        for _i in range(maxiter):
+            stp, phi1, derphi1, task = self._iterate(alpha1, phi1, derphi1, task)
 
             if not np.isfinite(stp):
                 task = b"WARN"
@@ -790,17 +844,14 @@ class DCSRCH:
         if (
             self.brackt
             and (stp <= self.stmin or stp >= self.stmax)
-            or (
-                self.brackt
-                and self.stmax - self.stmin <= self.xtol * self.stmax
-            )
+            or (self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax)
         ):
             stp = self.stx
 
         # Obtain another function and derivative
         task = b"FG"
         return stp, f, g, task
-    
+
 
 def dcstep(stx, fx, dx, sty, fy, dy, stp, fp, dp, brackt, stpmin, stpmax):
     """

@@ -1,33 +1,41 @@
 import taichi as ti
 from typing import Callable
-import numpy as np
+import os
 
 ti.init(arch=ti.metal)
 
-
 f = None
+
+
 def set_f(func: Callable) -> None:
     global f
     f = func
 
-N: ti.u8 = 2
-NPART: ti.i32 = 1000
+
+N: ti.u8 = int(os.environ["TI_DIM_X"])
+NPART: ti.i32 = int(os.environ["TI_NUM_PARTICLES"])
+
 
 MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f32)
 VTYPE = ti.types.vector(n=N, dtype=ti.f32)
 V2ITYPE = ti.types.vector(n=2, dtype=ti.i32)
-EVAL_COUNTS = ti.field(dtype=V2ITYPE, shape=(NPART,)) # one for each particle, function eval count
-HIS = ti.field(dtype=MTYPE, shape=(NPART,)) # hessian inverses
-GVALS = ti.field(dtype=VTYPE, shape=(NPART,)) # gradient values
+EVAL_COUNTS = ti.field(
+    dtype=V2ITYPE, shape=(NPART,)
+)  # one for each particle, function eval count
+HIS = ti.field(dtype=MTYPE, shape=(NPART,))  # hessian inverses
+GVALS = ti.field(dtype=VTYPE, shape=(NPART,))  # gradient values
+
 
 @ti.func
 def fprime(x: VTYPE) -> VTYPE:
     return two_point_gradient(x)
 
+
 @ti.func
 def zero_vtype() -> VTYPE:
     v = VTYPE(ti.static([0.0] * N))
     return v
+
 
 @ti.func
 def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> VTYPE:
@@ -41,20 +49,22 @@ def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> 
         p[pind] = 0.0
     return g
 
+
 @ti.func
-def matnorm(m: MTYPE, ord = ti.math.inf) -> ti.f32:
+def matnorm(m: MTYPE, ord=ti.math.inf) -> ti.f32:
     v = ti.math.nan
-    
+
     if ord == ti.math.inf:
         v = ti.abs(m).max()
     elif ord == -ti.math.inf:
         v = ti.abs(m).min()
     return v
 
+
 @ti.func
-def vecnorm(v, ord = 2.0) -> ti.f32:
+def vecnorm(v, ord=2.0) -> ti.f32:
     n: ti.f32 = 0.0
-    
+
     if ti.math.isinf(ord):
         if ord == ti.math.inf:
             n = ti.abs(v).max()
@@ -63,32 +73,38 @@ def vecnorm(v, ord = 2.0) -> ti.f32:
     elif ord == 2.0:
         n = v.norm()
     else:
-        n = (ti.abs(v)**ord).sum()**(1.0 / ord)
+        n = (ti.abs(v) ** ord).sum() ** (1.0 / ord)
     return n
+
 
 @ti.func
 def phi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
     ti.atomic_add(EVAL_COUNTS[i][0], 1)
-    return f(xk + s*pk)
+    return f(xk + s * pk)
+
 
 @ti.func
 def derphi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
-    GVALS[i] = fprime(xk + s*pk)
+    GVALS[i] = fprime(xk + s * pk)
     ti.atomic_add(EVAL_COUNTS[i][1], 1)
+    ti.atomic_add(EVAL_COUNTS[i][0], N)
     return ti.math.dot(GVALS[i], pk)
 
+
 @ti.func
-def line_search_wolfe1(i: int,
-                       xk: VTYPE,
-                       pk: VTYPE, 
-                       gfk: VTYPE,
-                       old_fval: ti.f32, 
-                       old_old_fval: ti.f32,
-                       c1: ti.f32, 
-                       c2: ti.f32, 
-                       amin: ti.f32,
-                       amax: ti.f32, 
-                       xtol: ti.f32):
+def line_search_wolfe1(
+    i: int,
+    xk: VTYPE,
+    pk: VTYPE,
+    gfk: VTYPE,
+    old_fval: ti.f32,
+    old_old_fval: ti.f32,
+    c1: ti.f32,
+    c2: ti.f32,
+    amin: ti.f32,
+    amax: ti.f32,
+    xtol: ti.f32,
+):
     """
     As `scalar_search_wolfe1` but do a line search to direction `pk`
 
@@ -122,25 +138,38 @@ def line_search_wolfe1(i: int,
 
     # print(i, xk, pk, old_fval, old_old_fval, derphi0,
     #         c1, c2, amax, amin, xtol)
-    
-    stp, fval, old_fval, task = scalar_search_wolfe1(i=i, xk=xk, pk=pk, phi0=old_fval, old_phi0=old_old_fval, derphi0=derphi0,
-            c1=c1, c2=c2, amax=amax, amin=amin, xtol=xtol)
+
+    stp, fval, old_fval, task = scalar_search_wolfe1(
+        i=i,
+        xk=xk,
+        pk=pk,
+        phi0=old_fval,
+        old_phi0=old_old_fval,
+        derphi0=derphi0,
+        c1=c1,
+        c2=c2,
+        amax=amax,
+        amin=amin,
+        xtol=xtol,
+    )
 
     return stp, EVAL_COUNTS[i].x, EVAL_COUNTS[i].y, fval, old_fval, GVALS[i], task
 
+
 @ti.func
 def scalar_search_wolfe1(
-                         i: int,
-                         xk: VTYPE,
-                         pk: VTYPE,
-                         phi0: ti.f32, 
-                         old_phi0: ti.f32, 
-                         derphi0: ti.f32,
-                         c1: ti.f32, 
-                         c2: ti.f32,
-                         amax: ti.f32, 
-                         amin: ti.f32, 
-                         xtol: ti.f32):
+    i: int,
+    xk: VTYPE,
+    pk: VTYPE,
+    phi0: ti.f32,
+    old_phi0: ti.f32,
+    derphi0: ti.f32,
+    c1: ti.f32,
+    c2: ti.f32,
+    amax: ti.f32,
+    amin: ti.f32,
+    xtol: ti.f32,
+):
     """
     Scalar function search for alpha that satisfies strong Wolfe conditions
 
@@ -185,12 +214,13 @@ def scalar_search_wolfe1(
     # print(i, xk, pk, phi0, old_phi0, derphi0,
     #         c1, c2, amax, amin, xtol)
 
-    dcsrch = DCSRCH(xk=xk, pk=pk, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax, i=i)
-    stp, phi1, phi0, task = dcsrch.call(
-        alpha1, phi0=phi0, derphi0=derphi0, maxiter=100
+    dcsrch = DCSRCH(
+        xk=xk, pk=pk, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax, i=i
     )
+    stp, phi1, phi0, task = dcsrch.call(alpha1, phi0=phi0, derphi0=derphi0, maxiter=100)
 
     return stp, phi1, phi0, task
+
 
 @ti.func
 def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
@@ -201,6 +231,7 @@ def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
         v = max_v
     return v
 
+
 TASK_START = ti.cast(0, ti.u8)
 TASK_WARNING = ti.cast(1, ti.u8)
 TASK_FG = ti.cast(2, ti.u8)
@@ -208,6 +239,7 @@ TASK_ERROR = ti.cast(3, ti.u8)
 TASK_CONVERGENCE = ti.cast(4, ti.u8)
 TASK_MAX_ITER_WARNING = ti.cast(5, ti.u8)
 TASK_MAX_INF_STP = ti.cast(6, ti.u8)
+
 
 @ti.dataclass
 class DCSRCH:
@@ -288,14 +320,12 @@ class DCSRCH:
         ti.loop_config(serialize=True)
         for j in range(maxiter):
             if not something_else and not inf_stp:
-                stp, phi1, derphi1, task = self.iterate(
-                    alpha1, phi1, derphi1, task
-                )
-                
+                stp, phi1, derphi1, task = self.iterate(alpha1, phi1, derphi1, task)
+
                 if ti.math.isinf(stp):
                     inf_stp = True
                     continue
-                
+
                 if task == TASK_FG:
                     alpha1 = stp
                     phi1 = phi(self.i, self.xk, self.pk, stp)
@@ -304,7 +334,7 @@ class DCSRCH:
                     something_else = True
                     continue
 
-                if j == maxiter-1:
+                if j == maxiter - 1:
                     max_iter_hit = True
 
         # maxiter reached, the line search did not converge
@@ -344,7 +374,6 @@ class DCSRCH:
             if task == TASK_ERROR:
                 skip = True
 
-            
             # Initialize local variables.
             if not skip:
                 self.brackt = False
@@ -390,7 +419,7 @@ class DCSRCH:
                 print("WARNING: ROUNDING ERRORS PREVENT PROGRESS")
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
                 task = TASK_WARNING
-                print('WARNING: XTOL TEST SATISFIED')
+                print("WARNING: XTOL TEST SATISFIED")
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
                 task = TASK_WARNING
                 print(103)
@@ -419,13 +448,11 @@ class DCSRCH:
                     gxm = self.gx - self.gtest
                     gym = self.gy - self.gtest
 
-
                     # Call dcstep to update stx, sty, and to compute the new step.
                     # dcstep can have several operations which can produce NaN
                     # e.g. inf/inf. Filter these out.
 
-                    self.stx, fxm, gxm, self.sty, fym, gym, stp, self.brackt \
-                    = dcstep(
+                    self.stx, fxm, gxm, self.sty, fym, gym, stp, self.brackt = dcstep(
                         self.stx,
                         fxm,
                         gxm,
@@ -451,28 +478,29 @@ class DCSRCH:
                     # dcstep can have several operations which can produce NaN
                     # e.g. inf/inf. Filter these out.
 
-                        (self.stx,
+                    (
+                        self.stx,
                         self.fx,
                         self.gx,
                         self.sty,
                         self.fy,
                         self.gy,
                         stp,
-                        self.brackt) \
-                        = dcstep(
-                            self.stx,
-                            self.fx,
-                            self.gx,
-                            self.sty,
-                            self.fy,
-                            self.gy,
-                            stp,
-                            f,
-                            g,
-                            self.brackt,
-                            self.stmin,
-                            self.stmax,
-                        )
+                        self.brackt,
+                    ) = dcstep(
+                        self.stx,
+                        self.fx,
+                        self.gx,
+                        self.sty,
+                        self.fy,
+                        self.gy,
+                        stp,
+                        f,
+                        g,
+                        self.brackt,
+                        self.stmin,
+                        self.stmax,
+                    )
 
                 # Decide if a bisection step is needed
                 if self.brackt:
@@ -507,32 +535,35 @@ class DCSRCH:
                 # Obtain another function and derivative
                 task = TASK_FG
         return stp, f, g, task
-        
-    
+
+
 @ti.func
 def sign(x):
     # behaves like numpy sign, returning 1.0 for x >= 0, -1 else
     return ti.math.sign(x) * 2.0 - 1.0
 
+
 @ti.func
-def dcstep(stx: ti.f32, 
-           fx: ti.f32, 
-           dx: ti.f32, 
-           sty: ti.f32, 
-           fy: ti.f32, 
-           dy: ti.f32, 
-           stp: ti.f32, 
-           fp: ti.f32, 
-           dp: ti.f32, 
-           brackt: ti.u1, 
-           stpmin: ti.f32, 
-           stpmax: ti.f32):
+def dcstep(
+    stx: ti.f32,
+    fx: ti.f32,
+    dx: ti.f32,
+    sty: ti.f32,
+    fy: ti.f32,
+    dy: ti.f32,
+    stp: ti.f32,
+    fp: ti.f32,
+    dp: ti.f32,
+    brackt: ti.u1,
+    stpmin: ti.f32,
+    stpmax: ti.f32,
+):
     sgn_dp = sign(dp)
     sgn_dx = sign(dx)
 
     sgnd = sgn_dp * sgn_dx
 
-    stpf = 0.0 # overwritten later
+    stpf = 0.0  # overwritten later
 
     # First case: A higher function value. The minimum is bracketed.
     # If the cubic step is closer to stx than the quadratic step, the
@@ -593,7 +624,7 @@ def dcstep(stx: ti.f32,
         p = (gamma - dp) + theta
         q = (gamma + (dx - dp)) + gamma
         r = p / q
-        stpc = 0.0 # overwritten
+        stpc = 0.0  # overwritten
         if r < 0 and gamma != 0:
             stpc = stp + r * (stx - stp)
         elif stp > stx:
@@ -658,12 +689,12 @@ def dcstep(stx: ti.f32,
         sty_ret = stp
         fy_ret = fp
         dy_ret = dp
-    
+
     if fp <= fx and sgnd < 0.0:
         sty_ret = stx
         fy_ret = fx
         dy_ret = dx
-    
+
     if fp <= fx:
         stx_ret = stp
         fx_ret = fp
@@ -674,28 +705,29 @@ def dcstep(stx: ti.f32,
 
     return stx_ret, fx_ret, dx_ret, sty_ret, fy_ret, dy_ret, stp, brackt
 
+
 @ti.func
-def minimize_bfgs(i: ti.i32,
-                  x0: VTYPE,
-                  gtol: ti.f32 = 1e-5, 
-                  norm: ti.f32 = ti.math.inf, 
-                  eps: ti.f32 = 1e-5, 
-                  maxiter: ti.u16 = 400,
-                  xrtol=1e-6,
-                  c1=1e-4,
-                  c2=0.9):
-    
+def minimize_bfgs(
+    i: ti.i32,
+    x0: VTYPE,
+    gtol: ti.f32 = 1e-4,
+    norm: ti.f32 = ti.math.inf,
+    eps: ti.f32 = 1e-6,
+    maxiter: ti.u16 = 100,
+    xrtol=1e-6,
+    c1=1e-4,
+    c2=0.9,
+):
     old_fval = f(x0)
     gfk = fprime(x0)
 
     k = 0
 
-    I = ti.Matrix.identity(dt=ti.f32, n=N)
-    Hk = I 
+    eye = ti.Matrix.identity(dt=ti.f32, n=N)
+    Hk = eye
 
     # Sets the initial step guess to dx ~ 1
     old_old_fval = old_fval + gfk.norm() / 2
-
 
     xk = x0
 
@@ -703,13 +735,22 @@ def minimize_bfgs(i: ti.i32,
     gnorm = vecnorm(gfk, ord=norm)
     while (gnorm > gtol) and (k < maxiter):
         pk = -Hk @ gfk
-        alpha_k, fc, gc, old_fval, old_old_fval, gfkp1, task = \
-                    line_search_wolfe1(i, xk, pk, gfk,
-                                        old_fval, old_old_fval, amin=1e-10,
-                                        amax=1e10, c1=c1, c2=c2, xtol=xrtol)
-                    # if k == 0:
-            #     print(xk, pk, gfk, old_fval, old_old_fval)
-            #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
+        alpha_k, fc, gc, old_fval, old_old_fval, gfkp1, task = line_search_wolfe1(
+            i,
+            xk,
+            pk,
+            gfk,
+            old_fval,
+            old_old_fval,
+            amin=1e-10,
+            amax=1e10,
+            c1=c1,
+            c2=c2,
+            xtol=xrtol,
+        )
+        # if k == 0:
+        #     print(xk, pk, gfk, old_fval, old_old_fval)
+        #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
 
         if task != TASK_CONVERGENCE:
             # Line search failed to find a better solution.
@@ -733,7 +774,7 @@ def minimize_bfgs(i: ti.i32,
         #  O. Tingleff: "Unconstrained Optimization", IMM, DTU.  1999.
         #  These notes are available here:
         #  http://www2.imm.dtu.dk/documents/ftp/publlec.html
-        if alpha_k*vecnorm(pk) <= xrtol*(xrtol + vecnorm(xk)):
+        if alpha_k * vecnorm(pk) <= xrtol * (xrtol + vecnorm(xk)):
             break
 
         if ti.math.isinf(old_fval):
@@ -746,17 +787,17 @@ def minimize_bfgs(i: ti.i32,
         # this was handled in numeric, let it remains for more safety
         # Cryptic comment above is preserved for posterity. Future reader:
         # consider change to condition below proposed in gh-1261/gh-17345.
-        rhok: ti.f32 = 0.0 # to be overwritten
-        if rhok_inv == 0.:
+        rhok: ti.f32 = 0.0  # to be overwritten
+        if rhok_inv == 0.0:
             rhok = 1000.0
             print("Divide-by-zero encountered: rhok assumed large")
         else:
-            rhok = 1. / rhok_inv
+            rhok = 1.0 / rhok_inv
 
-        A1 = I - sk.outer_product(yk) * rhok
-        A2 = I - yk.outer_product(sk) * rhok
+        A1 = eye - sk.outer_product(yk) * rhok
+        A2 = eye - yk.outer_product(sk) * rhok
         Hk = A1 @ (Hk @ A2) + rhok * sk.outer_product(sk)
-        
+
     fval = old_fval
 
     if k >= maxiter:
