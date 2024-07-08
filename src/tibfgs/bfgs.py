@@ -2,7 +2,7 @@ import taichi as ti
 from typing import Callable
 import numpy as np
 
-ti.init(arch=ti.cpu, offline_cache=False)
+ti.init(arch=ti.metal)
 
 
 f = None
@@ -387,10 +387,10 @@ class DCSRCH:
             # test for warnings
             if self.brackt and (stp <= self.stmin or stp >= self.stmax):
                 task = TASK_WARNING
-                print(101)
+                print("WARNING: ROUNDING ERRORS PREVENT PROGRESS")
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
                 task = TASK_WARNING
-                print(102)
+                print('WARNING: XTOL TEST SATISFIED')
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
                 task = TASK_WARNING
                 print(103)
@@ -752,8 +752,6 @@ def minimize_bfgs(i: ti.i32,
             print("Divide-by-zero encountered: rhok assumed large")
         else:
             rhok = 1. / rhok_inv
-
-        print(sk, yk, rhok, xk)
 
         A1 = I - sk.outer_product(yk) * rhok
         A2 = I - yk.outer_product(sk) * rhok

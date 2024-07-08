@@ -164,17 +164,17 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         else:
             rhok = 1. / rhok_inv
         
-        if k < 2:
-            print(sk, yk, rhok)
-            print(sk.reshape(2,1) @ yk.reshape(1,2) * rhok)
+        # if k < 2:
+        #     print(sk, yk, rhok)
+        #     print(sk.reshape(2,1) @ yk.reshape(1,2) * rhok)
 
         A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
         A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
         Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] *
                                                  sk[np.newaxis, :])
 
-        if k < 2:
-            print(A1)
+        # if k < 2:
+        #     print(A1)
 
     fval = old_fval
 

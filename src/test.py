@@ -222,9 +222,21 @@ def test_bfgs():
 
     set_f(rosen_ti)
 
+    res = ti.types.struct(
+        fun=ti.f32,
+        jac=VTYPE,
+        hess_inv=MTYPE,
+        status=ti.u8,
+        xk=VTYPE,
+        k=ti.u32
+    )
+
     @ti.kernel
-    def run():
+    def run() -> res:
         x0 = ti.math.vec2([-1.0, 1.0])
-        minimize_bfgs_ti(i=0, x0=x0)
+        fval, gfk, Hk, warnflag, xk, k = minimize_bfgs_ti(i=0, x0=x0, gtol=1e-3, eps=1e-6)
+        print(k)
+        return res(fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k)
     
-    run()
+    r = run()
+    print(r)
