@@ -7,3 +7,4 @@ include
 .DS_Store
 .lock
 .ruff_cache
+*.txt

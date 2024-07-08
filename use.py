@@ -4,6 +4,13 @@ os.environ['TI_DIM_X'] = str(2)
 os.environ['TI_NUM_PARTICLES'] = str(int(1e5))
 
 import taichi as ti
+ti.init(arch=ti.metal,
+        default_fp=ti.float32,
+        fast_math=True,
+        advanced_optimization=True,
+        num_compile_threads=32,
+        opt_level=3)
+
 from tibfgs import NPART, N, minimize_bfgs, ackley, ackley_np, set_f, rosen, VTYPE, MTYPE
 import time
 import numpy as np

@@ -2,8 +2,6 @@ import taichi as ti
 from typing import Callable
 import os
 
-ti.init(arch=ti.metal)
-
 f = None
 
 
@@ -22,7 +20,6 @@ V2ITYPE = ti.types.vector(n=2, dtype=ti.i32)
 EVAL_COUNTS = ti.field(
     dtype=V2ITYPE, shape=(NPART,)
 )  # one for each particle, function eval count
-HIS = ti.field(dtype=MTYPE, shape=(NPART,))  # hessian inverses
 GVALS = ti.field(dtype=VTYPE, shape=(NPART,))  # gradient values
 
 
@@ -32,18 +29,12 @@ def fprime(x: VTYPE) -> VTYPE:
 
 
 @ti.func
-def zero_vtype() -> VTYPE:
-    v = VTYPE(ti.static([0.0] * N))
-    return v
-
-
-@ti.func
 def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> VTYPE:
-    g = zero_vtype()
+    g = VTYPE(0.0)
     fx0 = f(x0)
 
-    p = zero_vtype()
-    for pind in ti.static(range(N)):
+    p = VTYPE(0.0)
+    for pind in range(N):
         p[pind] = finite_difference_stepsize
         g[pind] = (f(x0 + p) - fx0) / finite_difference_stepsize
         p[pind] = 0.0
@@ -416,10 +407,10 @@ class DCSRCH:
             # test for warnings
             if self.brackt and (stp <= self.stmin or stp >= self.stmax):
                 task = TASK_WARNING
-                print("WARNING: ROUNDING ERRORS PREVENT PROGRESS")
+                # print("WARNING: ROUNDING ERRORS PREVENT PROGRESS")
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
                 task = TASK_WARNING
-                print("WARNING: XTOL TEST SATISFIED")
+                # print("WARNING: XTOL TEST SATISFIED")
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
                 task = TASK_WARNING
                 print(103)
@@ -721,8 +712,6 @@ def minimize_bfgs(
     old_fval = f(x0)
     gfk = fprime(x0)
 
-    k = 0
-
     eye = ti.Matrix.identity(dt=ti.f32, n=N)
     Hk = eye
 
@@ -732,8 +721,10 @@ def minimize_bfgs(
     xk = x0
 
     warnflag = 0
+    ki = 0
     gnorm = vecnorm(gfk, ord=norm)
-    while (gnorm > gtol) and (k < maxiter):
+    ti.loop_config(serialize=True)
+    for k in range(maxiter):
         pk = -Hk @ gfk
         alpha_k, fc, gc, old_fval, old_old_fval, gfkp1, task = line_search_wolfe1(
             i,
@@ -764,7 +755,6 @@ def minimize_bfgs(
 
         yk = gfkp1 - gfk
         gfk = gfkp1
-        k += 1
 
         gnorm = vecnorm(gfk, ord=norm)
         if gnorm <= gtol:
@@ -797,12 +787,13 @@ def minimize_bfgs(
         A1 = eye - sk.outer_product(yk) * rhok
         A2 = eye - yk.outer_product(sk) * rhok
         Hk = A1 @ (Hk @ A2) + rhok * sk.outer_product(sk)
+        ki = k
 
     fval = old_fval
 
-    if k >= maxiter:
+    if ki >= maxiter-1:
         warnflag = 1
     elif ti.math.isnan(gnorm) or ti.math.isnan(fval) or ti.math.isnan(xk).any():
         warnflag = 3
 
-    return fval, gfk, Hk, warnflag, xk, k
+    return fval, gfk, Hk, warnflag, xk, ki
