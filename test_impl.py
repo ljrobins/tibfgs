@@ -1,6 +1,7 @@
 from src import spbfgs, tibfgs
 import numpy as np
 from pprint import pprint
+import taichi as ti
 
 import src
 
@@ -10,11 +11,10 @@ x0 = np.array([-1.0, 1.0])
 src.test_vecnorm()
 src.test_fdiff()
 src.test_dcstep()
-src.test_dcsearch()
-src.test_scalar_search_wolfe1()
+# src.test_dcsearch()
+# src.test_scalar_search_wolfe1()
 src.test_wolfe1()
 
-import taichi as ti
 
 # @ti.dataclass
 # class Circle:

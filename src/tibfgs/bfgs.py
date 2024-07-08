@@ -1,7 +1,7 @@
 import taichi as ti
 from typing import Callable
 
-ti.init(arch=ti.gpu)
+ti.init(arch=ti.metal, offline_cache=False)
 
 
 f = None
@@ -9,17 +9,15 @@ def set_f(func: Callable) -> None:
     global f
     f = func
 
-N = 2
-NPART = 1
+N: ti.u8 = 2
+NPART: ti.i32 = 1000
 
 MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f32)
 VTYPE = ti.types.vector(n=N, dtype=ti.f32)
-PCOUNT_TYPE = ti.types.vector(n=NPART, dtype=ti.u16) # one for each particle
+V2ITYPE = ti.types.vector(n=2, dtype=ti.i32)
+EVAL_COUNTS = ti.field(dtype=V2ITYPE, shape=(NPART,)) # one for each particle, function eval count
 HIS = ti.field(dtype=MTYPE, shape=(NPART,)) # hessian inverses
 GVALS = ti.field(dtype=VTYPE, shape=(NPART,)) # gradient values
-# GRADS = ti.field(dtype=VTYPE, shape=(NPART,1)) # gradients
-FCOUNT = PCOUNT_TYPE(ti.static([0] * NPART)) # objective funcion eval count
-GCOUNT = PCOUNT_TYPE(ti.static([0] * NPART)) # gradient eval count
 
 @ti.func
 def fprime(x: VTYPE) -> VTYPE:
@@ -53,15 +51,14 @@ def matnorm(m: MTYPE, ord = ti.math.inf) -> ti.f32:
     return v
 
 @ti.func
-def phi(i: int, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
-    FCOUNT[i] += 1
+def phi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
+    ti.atomic_add(EVAL_COUNTS[i][0], 1)
     return f(xk + s*pk)
 
 @ti.func
-def derphi(i: int, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
+def derphi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
     GVALS[i] = fprime(xk + s*pk)
-    # print(xk, pk, s)
-    GCOUNT[i] += 1
+    ti.atomic_add(EVAL_COUNTS[i][1], 1)
     return ti.math.dot(GVALS[i], pk)
 
 @ti.func
@@ -102,15 +99,18 @@ def line_search_wolfe1(i: int,
         Gradient of `f` at the final point
 
     """
-    FCOUNT[i] = 0
-    GCOUNT[i] = 0
+    # FCOUNT[i] = 0
+    # GCOUNT[i] = 0
 
     derphi0 = ti.math.dot(gfk, pk)
 
+    # print(i, xk, pk, old_fval, old_old_fval, derphi0,
+    #         c1, c2, amax, amin, xtol)
+    
     stp, fval, old_fval = scalar_search_wolfe1(i=i, xk=xk, pk=pk, phi0=old_fval, old_phi0=old_old_fval, derphi0=derphi0,
             c1=c1, c2=c2, amax=amax, amin=amin, xtol=xtol)
 
-    return stp, FCOUNT[i], GCOUNT[i], fval, old_fval, GVALS[i]
+    return stp, EVAL_COUNTS[i].x, EVAL_COUNTS[i].y, fval, old_fval, GVALS[i]
 
 @ti.func
 def scalar_search_wolfe1(
@@ -158,14 +158,17 @@ def scalar_search_wolfe1(
 
     """
 
-    alpha1 = ti.math.nan
+    alpha1: ti.f32 = 0.0
     if derphi0 != 0:
-        alpha1 = ti.min(1.0, 1.01*2*(phi0 - old_phi0)/derphi0)
+        alpha1 = ti.min(1.0, 2.02 * (phi0 - old_phi0) / derphi0)
         if alpha1 < 0:
             alpha1 = 1.0
     else:
         alpha1 = 1.0
-    
+
+    # print(i, xk, pk, phi0, old_phi0, derphi0,
+    #         c1, c2, amax, amin, xtol)
+
     dcsrch = DCSRCH(xk=xk, pk=pk, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax, i=i)
     stp, phi1, phi0, task = dcsrch.call(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=100
@@ -187,6 +190,8 @@ TASK_WARNING = ti.cast(1, ti.u8)
 TASK_FG = ti.cast(2, ti.u8)
 TASK_ERROR = ti.cast(3, ti.u8)
 TASK_CONVERGENCE = ti.cast(4, ti.u8)
+TASK_MAX_ITER_WARNING = ti.cast(5, ti.u8)
+TASK_MAX_INF_STP = ti.cast(6, ti.u8)
 
 @ti.dataclass
 class DCSRCH:
@@ -217,7 +222,6 @@ class DCSRCH:
     stmax: ti.f32
     width: ti.f32
     width1: ti.f32
-
 
     @ti.func
     def call(self, alpha1, phi0, derphi0, maxiter):
@@ -255,7 +259,7 @@ class DCSRCH:
         """
 
         phi1: ti.f32 = phi0
-        derphi1: ti.f32= derphi0
+        derphi1: ti.f32 = derphi0
 
         task: ti.u8 = TASK_START
         inf_stp = False
@@ -263,32 +267,35 @@ class DCSRCH:
         something_else = False
         stp: ti.f32 = 0.0
 
+        # print(self.xk, self.pk, self.ftol, self.gtol, self.xtol, self.stpmin, self.stpmax, self.i, alpha1, phi0, derphi0, maxiter)
+
         ti.loop_config(serialize=True)
         for j in range(maxiter):
-            if not something_else and not inf_stp and not max_iter_hit:
+            if not something_else and not inf_stp:
                 stp, phi1, derphi1, task = self.iterate(
                     alpha1, phi1, derphi1, task
                 )
                 
                 if ti.math.isinf(stp):
                     inf_stp = True
+                    continue
                 
-                if not inf_stp:
-                    if task == TASK_FG:
-                        alpha1 = stp
-                        phi1 = phi(self.i, self.xk, self.pk, stp)
-                        derphi1 = derphi(self.i, self.xk, self.pk, stp)
-                    else:
-                        something_else = True
+                if task == TASK_FG:
+                    alpha1 = stp
+                    phi1 = phi(self.i, self.xk, self.pk, stp)
+                    derphi1 = derphi(self.i, self.xk, self.pk, stp)
+                else:
+                    something_else = True
+                    continue
 
                 if j == maxiter-1:
                     max_iter_hit = True
 
         # maxiter reached, the line search did not converge
         if max_iter_hit:
-            task = TASK_WARNING
+            task = TASK_MAX_ITER_WARNING
         elif inf_stp:
-            task = TASK_ERROR
+            task = TASK_MAX_INF_STP
 
         return stp, phi1, phi0, task
 
@@ -302,26 +309,20 @@ class DCSRCH:
 
         if task == TASK_START:
             if stp < self.stpmin:
-                print('fuck1')
                 task = TASK_ERROR
             if stp > self.stpmax:
-                print('fuck2')
                 task = TASK_ERROR
             if g >= 0:
-                print('fuck3')
                 task = TASK_ERROR
             if self.ftol < 0:
-                print('fuck4')
                 task = TASK_ERROR
             if self.gtol < 0:
-                task =TASK_ERROR
+                task = TASK_ERROR
             if self.xtol < 0:
                 task = TASK_ERROR
             if self.stpmin < 0:
                 task = TASK_ERROR
             if self.stpmax < self.stpmin:
-                print(self.ftol)
-                print('fuck')
                 task = TASK_ERROR
 
             if task == TASK_ERROR:
@@ -381,9 +382,8 @@ class DCSRCH:
                 task = TASK_WARNING
                 print(104)
 
-
             # test for convergence
-            if f <= ftest and abs(g) <= self.gtol * -self.ginit:
+            if f <= ftest and ti.abs(g) <= ti.abs(self.gtol * self.ginit):
                 task = TASK_CONVERGENCE
 
             # test for termination
@@ -571,7 +571,7 @@ def dcstep(stx: ti.f32,
 
         # The case gamma = 0 only arises if the cubic does not tend
         # to infinity in the direction of the step.
-        gamma = s * ti.sqrt(max(0, (theta / s) ** 2 - (dx / s) * (dp / s)))
+        gamma = s * ti.sqrt(ti.max(0, (theta / s) ** 2 - (dx / s) * (dp / s)))
         if stp > stx:
             gamma = -gamma
         p = (gamma - dp) + theta

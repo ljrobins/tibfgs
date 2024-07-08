@@ -300,7 +300,6 @@ def scalar_search_wolfe1(phi, derphi, phi0, old_phi0, derphi0,
 
     maxiter = 100
 
-
     dcsrch = DCSRCH(phi, derphi, c1, c2, xtol, amin, amax)
 
     stp, phi1, phi0, task = dcsrch(
