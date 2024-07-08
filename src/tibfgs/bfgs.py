@@ -1,7 +1,8 @@
 import taichi as ti
 from typing import Callable
+import numpy as np
 
-ti.init(arch=ti.metal, offline_cache=False)
+ti.init(arch=ti.cpu, offline_cache=False)
 
 
 f = None
@@ -49,6 +50,21 @@ def matnorm(m: MTYPE, ord = ti.math.inf) -> ti.f32:
     elif ord == -ti.math.inf:
         v = ti.abs(m).min()
     return v
+
+@ti.func
+def vecnorm(v, ord = 2.0) -> ti.f32:
+    n: ti.f32 = 0.0
+    
+    if ti.math.isinf(ord):
+        if ord == ti.math.inf:
+            n = ti.abs(v).max()
+        elif ord == -ti.math.inf:
+            n = ti.abs(v).min()
+    elif ord == 2.0:
+        n = v.norm()
+    else:
+        n = (ti.abs(v)**ord).sum()**(1.0 / ord)
+    return n
 
 @ti.func
 def phi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
@@ -107,10 +123,10 @@ def line_search_wolfe1(i: int,
     # print(i, xk, pk, old_fval, old_old_fval, derphi0,
     #         c1, c2, amax, amin, xtol)
     
-    stp, fval, old_fval = scalar_search_wolfe1(i=i, xk=xk, pk=pk, phi0=old_fval, old_phi0=old_old_fval, derphi0=derphi0,
+    stp, fval, old_fval, task = scalar_search_wolfe1(i=i, xk=xk, pk=pk, phi0=old_fval, old_phi0=old_old_fval, derphi0=derphi0,
             c1=c1, c2=c2, amax=amax, amin=amin, xtol=xtol)
 
-    return stp, EVAL_COUNTS[i].x, EVAL_COUNTS[i].y, fval, old_fval, GVALS[i]
+    return stp, EVAL_COUNTS[i].x, EVAL_COUNTS[i].y, fval, old_fval, GVALS[i], task
 
 @ti.func
 def scalar_search_wolfe1(
@@ -174,7 +190,7 @@ def scalar_search_wolfe1(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=100
     )
 
-    return stp, phi1, phi0
+    return stp, phi1, phi0, task
 
 @ti.func
 def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
@@ -657,3 +673,100 @@ def dcstep(stx: ti.f32,
     stp = stpf
 
     return stx_ret, fx_ret, dx_ret, sty_ret, fy_ret, dy_ret, stp, brackt
+
+@ti.func
+def minimize_bfgs(i: ti.i32,
+                  x0: VTYPE,
+                  gtol: ti.f32 = 1e-5, 
+                  norm: ti.f32 = ti.math.inf, 
+                  eps: ti.f32 = 1e-4, 
+                  maxiter: ti.u16 = 400,
+                  xrtol=1e-6,
+                  c1=1e-4,
+                  c2=0.9):
+    
+    old_fval = f(x0)
+    gfk = fprime(x0)
+
+    k = 0
+
+    I = ti.Matrix(ti.static(np.eye(N, dtype=int).tolist()))
+    Hk = I 
+
+    # Sets the initial step guess to dx ~ 1
+    old_old_fval = old_fval + gfk.norm() / 2
+
+
+    xk = x0
+
+    warnflag = 0
+    gnorm = vecnorm(gfk, ord=norm)
+    while (gnorm > gtol) and (k < maxiter):
+        pk = -Hk @ gfk
+        alpha_k, fc, gc, old_fval, old_old_fval, gfkp1, task = \
+                    line_search_wolfe1(i, xk, pk, gfk,
+                                        old_fval, old_old_fval, amin=1e-10,
+                                        amax=1e10, c1=c1, c2=c2, xtol=xrtol)
+                    # if k == 0:
+            #     print(xk, pk, gfk, old_fval, old_old_fval)
+            #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
+
+        if task != TASK_CONVERGENCE:
+            # Line search failed to find a better solution.
+            warnflag = 2
+            break
+
+        sk = alpha_k * pk
+        xkp1 = xk + sk
+
+        xk = xkp1
+
+        yk = gfkp1 - gfk
+        gfk = gfkp1
+        k += 1
+
+        gnorm = vecnorm(gfk, ord=norm)
+        if gnorm <= gtol:
+            break
+
+        #  See Chapter 5 in  P.E. Frandsen, K. Jonasson, H.B. Nielsen,
+        #  O. Tingleff: "Unconstrained Optimization", IMM, DTU.  1999.
+        #  These notes are available here:
+        #  http://www2.imm.dtu.dk/documents/ftp/publlec.html
+        if alpha_k*vecnorm(pk) <= xrtol*(xrtol + vecnorm(xk)):
+            break
+
+        if ti.math.isinf(old_fval):
+            # We correctly found +-Inf as optimal value, or something went
+            # wrong.
+            warnflag = 2
+            break
+
+        rhok_inv = ti.math.dot(yk, sk)
+        # this was handled in numeric, let it remains for more safety
+        # Cryptic comment above is preserved for posterity. Future reader:
+        # consider change to condition below proposed in gh-1261/gh-17345.
+        rhok: ti.f32 = 0.0 # to be overwritten
+        if rhok_inv == 0.:
+            rhok = 1000.0
+            print("Divide-by-zero encountered: rhok assumed large")
+        else:
+            rhok = 1. / rhok_inv
+
+        print(sk, yk, rhok)
+
+        break
+
+        # A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
+        # A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
+        # Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] *
+        #                                          sk[np.newaxis, :])
+
+    fval = old_fval
+
+    if k >= maxiter:
+        warnflag = 1
+    elif ti.math.isnan(gnorm) or ti.math.isnan(fval) or ti.math.isnan(xk).any():
+        warnflag = 3
+
+    return fval, gfk, Hk, warnflag, xk, k

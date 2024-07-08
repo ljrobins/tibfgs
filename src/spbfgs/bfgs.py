@@ -37,8 +37,8 @@ def vecnorm(x, ord=2):
         return np.sum(np.abs(x)**ord, axis=0)**(1.0 / ord)
 
 def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
-                   gtol=1e-5, norm=np.inf, eps=_epsilon * 100, maxiter=None,
-                   disp=False, return_all=False, finite_diff_rel_step=None,
+                   gtol=1e-5, norm=np.inf, eps=1e-7, maxiter=None,
+                   disp=False, return_all=False,
                    xrtol=0, c1=1e-4, c2=0.9,
                    hess_inv0=None):
     """
@@ -163,6 +163,9 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
                 _print_success_message_or_warn(True, msg)
         else:
             rhok = 1. / rhok_inv
+        
+        if k < 2:
+            print(sk, yk, rhok)
 
         A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
         A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
@@ -238,7 +241,6 @@ def line_search_wolfe1(f, fprime, xk, pk, gfk=None,
     def derphi(s):
         gval[0] = fprime(xk + s*pk)
         gc[0] += 1
-        print('calling derphi np')
         return np.dot(gval[0], pk)
 
     derphi0 = np.dot(gfk, pk)
@@ -305,6 +307,9 @@ def scalar_search_wolfe1(phi, derphi, phi0, old_phi0, derphi0,
     stp, phi1, phi0, task = dcsrch(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter
     )
+
+    if task[:4] != b'CONV':
+        raise _LineSearchError()
 
     return stp, phi1, phi0
 

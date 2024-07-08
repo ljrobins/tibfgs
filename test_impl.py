@@ -5,15 +5,14 @@ import taichi as ti
 
 import src
 
-x0 = np.array([-1.0, 1.0])
-# res = spbfgs.minimize_bfgs(spbfgs.rosen, x0)
-
+src.test_matnorm()
 src.test_vecnorm()
 src.test_fdiff()
 src.test_dcstep()
 # src.test_dcsearch()
 # src.test_scalar_search_wolfe1()
-src.test_wolfe1()
+# src.test_wolfe1()
+src.test_bfgs()
 
 
 # @ti.dataclass

@@ -4,16 +4,29 @@ from .tibfgs import matnorm, VTYPE, MTYPE, rosen as rosen_ti, two_point_gradient
 import taichi as ti
 import time
 
-def test_vecnorm():
+def test_matnorm():
     m = np.array([[-1.0, 1.0], [2.0, 3.0]])
     
     @ti.kernel
-    def call_vecnorm_ti(ord: ti.f32) -> ti.f32:
+    def call_matnorm_ti(ord: ti.f32) -> ti.f32:
         m = MTYPE([[-1.0, 1.0], [2.0, 3.0]])
         return matnorm(m, ord=ord)
 
-    assert np.allclose(call_vecnorm_ti(ti.math.inf), vecnorm(m, ord=np.inf))
-    assert np.allclose(call_vecnorm_ti(-ti.math.inf), vecnorm(m, ord=-np.inf))
+    assert np.allclose(call_matnorm_ti(ti.math.inf), vecnorm(m, ord=np.inf))
+    assert np.allclose(call_matnorm_ti(-ti.math.inf), vecnorm(m, ord=-np.inf))
+
+def test_vecnorm():
+    from .tibfgs import vecnorm
+    
+    @ti.kernel
+    def call_vecnorm_ti(ord: ti.f32) -> ti.f32:
+        v = ti.Vector([1.0, 2.0, 3.0])
+        return vecnorm(v, ord=ord)
+
+    assert np.allclose(call_vecnorm_ti(ti.math.inf), 3)
+    assert np.allclose(call_vecnorm_ti(-ti.math.inf), 1)
+    assert np.allclose(call_vecnorm_ti(2), np.sqrt(14))
+    assert np.allclose(call_vecnorm_ti(3), np.cbrt(36))
 
 def test_fdiff():
     from .tibfgs import fprime
@@ -146,7 +159,7 @@ def test_scalar_search_wolfe1():
     from .tibfgs import scalar_search_wolfe1 as scalar_search_wolfe1_ti, DCSRCH as DCSRCH_ti
     
     @ti.kernel
-    def run_ti() -> ti.types.vector(3, ti.f32):
+    def run_ti() -> ti.types.vector(4, ti.f32):
         x = ti.Vector(scalar_search_wolfe1_ti(
                          i = 10,
                          xk=ti.math.vec2(xkl),
@@ -162,7 +175,7 @@ def test_scalar_search_wolfe1():
 
         return x
 
-    tup_ti = run_ti().to_numpy()
+    tup_ti = run_ti().to_numpy()[:3]
     assert np.allclose(tup_np, tup_ti)
 
 def test_wolfe1():
@@ -197,3 +210,21 @@ def test_wolfe1():
     
     x = call_ti_line_search()
     print(x)
+
+def test_bfgs():
+    from .spbfgs import minimize_bfgs as minimize_bfgs_np
+    from .tibfgs import minimize_bfgs as minimize_bfgs_ti
+
+    x0 = np.array([-1.0, 1.0])
+    res = minimize_bfgs_np(rosen_np, x0, eps=1e-4)
+
+    print(res)
+
+    set_f(rosen_ti)
+
+    @ti.kernel
+    def run():
+        x0 = ti.math.vec2([-1.0, 1.0])
+        minimize_bfgs_ti(i=0, x0=x0)
+    
+    run()
