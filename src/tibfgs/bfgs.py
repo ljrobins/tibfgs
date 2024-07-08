@@ -1,7 +1,7 @@
 import taichi as ti
 from typing import Callable
 
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 
 f = None
@@ -60,6 +60,7 @@ def phi(i: int, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
 @ti.func
 def derphi(i: int, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
     GVALS[i] = fprime(xk + s*pk)
+    # print(xk, pk, s)
     GCOUNT[i] += 1
     return ti.math.dot(GVALS[i], pk)
 
@@ -106,13 +107,16 @@ def line_search_wolfe1(i: int,
 
     derphi0 = ti.math.dot(gfk, pk)
 
-    stp, fval, old_fval = scalar_search_wolfe1(i, old_fval, old_old_fval, derphi0,
+    stp, fval, old_fval = scalar_search_wolfe1(i=i, xk=xk, pk=pk, phi0=old_fval, old_phi0=old_old_fval, derphi0=derphi0,
             c1=c1, c2=c2, amax=amax, amin=amin, xtol=xtol)
 
     return stp, FCOUNT[i], GCOUNT[i], fval, old_fval, GVALS[i]
 
 @ti.func
-def scalar_search_wolfe1(i: int,
+def scalar_search_wolfe1(
+                         i: int,
+                         xk: VTYPE,
+                         pk: VTYPE,
                          phi0: ti.f32, 
                          old_phi0: ti.f32, 
                          derphi0: ti.f32,
@@ -162,8 +166,8 @@ def scalar_search_wolfe1(i: int,
     else:
         alpha1 = 1.0
     
-    dcsrch = DCSRCH(phi, derphi, c1, c2, xtol, amin, amax)
-    stp, phi1, phi0, task = dcsrch(
+    dcsrch = DCSRCH(xk=xk, pk=pk, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax, i=i)
+    stp, phi1, phi0, task = dcsrch.call(
         alpha1, phi0=phi0, derphi0=derphi0, maxiter=100
     )
 
@@ -216,7 +220,7 @@ class DCSRCH:
 
 
     @ti.func
-    def call(self, alpha1, phi0, derphi0, maxiter=100):
+    def call(self, alpha1, phi0, derphi0, maxiter):
         """
         Parameters
         ----------
@@ -256,35 +260,35 @@ class DCSRCH:
         task: ti.u8 = TASK_START
         inf_stp = False
         max_iter_hit = False
+        something_else = False
         stp: ti.f32 = 0.0
 
-        for _ in range(1): # because it won't let me break in the outermost loop, dumb
-            for j in range(maxiter):
+        ti.loop_config(serialize=True)
+        for j in range(maxiter):
+            if not something_else and not inf_stp and not max_iter_hit:
                 stp, phi1, derphi1, task = self.iterate(
                     alpha1, phi1, derphi1, task
                 )
                 
-                if ti.math.isinf(ti.abs(stp)):
-                    inf_stp: ti.u1 = True
-                    break
-
-                if task == TASK_FG:
-                    alpha1 = stp
-                    phi1 = phi(self.i, self.xk, self.pk, stp)
-                    derphi1 = derphi(self.i, self.xk, self.pk, stp)
-                else:
-                    break
+                if ti.math.isinf(stp):
+                    inf_stp = True
+                
+                if not inf_stp:
+                    if task == TASK_FG:
+                        alpha1 = stp
+                        phi1 = phi(self.i, self.xk, self.pk, stp)
+                        derphi1 = derphi(self.i, self.xk, self.pk, stp)
+                    else:
+                        something_else = True
 
                 if j == maxiter-1:
                     max_iter_hit = True
 
-            # maxiter reached, the line search did not converge
-            if max_iter_hit:
-                print('max iter')
-                task = TASK_WARNING
-            elif inf_stp:
-                print('inf stp')
-                task = TASK_ERROR
+        # maxiter reached, the line search did not converge
+        if max_iter_hit:
+            task = TASK_WARNING
+        elif inf_stp:
+            task = TASK_ERROR
 
         return stp, phi1, phi0, task
 
@@ -366,16 +370,16 @@ class DCSRCH:
             # test for warnings
             if self.brackt and (stp <= self.stmin or stp >= self.stmax):
                 task = TASK_WARNING
-                print('w1')
+                print(101)
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
                 task = TASK_WARNING
-                print('w2')
+                print(102)
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
                 task = TASK_WARNING
-                print('w3')
+                print(103)
             if stp == self.stpmin and (f > ftest or g >= self.gtest):
                 task = TASK_WARNING
-                print('w4')
+                print(104)
 
 
             # test for convergence

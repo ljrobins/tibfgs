@@ -238,6 +238,7 @@ def line_search_wolfe1(f, fprime, xk, pk, gfk=None,
     def derphi(s):
         gval[0] = fprime(xk + s*pk)
         gc[0] += 1
+        print('calling derphi np')
         return np.dot(gval[0], pk)
 
     derphi0 = np.dot(gfk, pk)
