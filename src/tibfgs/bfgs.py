@@ -30,7 +30,7 @@ def zero_vtype() -> VTYPE:
     return v
 
 @ti.func
-def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-4) -> VTYPE:
+def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> VTYPE:
     g = zero_vtype()
     fx0 = f(x0)
 
@@ -679,7 +679,7 @@ def minimize_bfgs(i: ti.i32,
                   x0: VTYPE,
                   gtol: ti.f32 = 1e-5, 
                   norm: ti.f32 = ti.math.inf, 
-                  eps: ti.f32 = 1e-4, 
+                  eps: ti.f32 = 1e-5, 
                   maxiter: ti.u16 = 400,
                   xrtol=1e-6,
                   c1=1e-4,
@@ -690,7 +690,7 @@ def minimize_bfgs(i: ti.i32,
 
     k = 0
 
-    I = ti.Matrix(ti.static(np.eye(N, dtype=int).tolist()))
+    I = ti.Matrix.identity(dt=ti.f32, n=N)
     Hk = I 
 
     # Sets the initial step guess to dx ~ 1
@@ -753,15 +753,12 @@ def minimize_bfgs(i: ti.i32,
         else:
             rhok = 1. / rhok_inv
 
-        print(sk, yk, rhok)
+        print(sk, yk, rhok, xk)
 
-        break
-
-        # A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
-        # A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
-        # Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] *
-        #                                          sk[np.newaxis, :])
-
+        A1 = I - sk.outer_product(yk) * rhok
+        A2 = I - yk.outer_product(sk) * rhok
+        Hk = A1 @ (Hk @ A2) + rhok * sk.outer_product(sk)
+        
     fval = old_fval
 
     if k >= maxiter:

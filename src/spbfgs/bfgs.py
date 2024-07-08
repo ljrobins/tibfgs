@@ -111,8 +111,8 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         try:
             alpha_k, fc, gc, old_fval, old_old_fval, gfkp1 = \
                      line_search_wolfe1(f, myfprime, xk, pk, gfk,
-                                          old_fval, old_old_fval, amin=1e-100,
-                                          amax=1e100, c1=c1, c2=c2)
+                                          old_fval, old_old_fval, amin=1e-10,
+                                          amax=1e10, c1=c1, c2=c2)
             # if k == 0:
             #     print(xk, pk, gfk, old_fval, old_old_fval)
             #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
@@ -166,11 +166,15 @@ def minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
         
         if k < 2:
             print(sk, yk, rhok)
+            print(sk.reshape(2,1) @ yk.reshape(1,2) * rhok)
 
         A1 = I - sk[:, np.newaxis] * yk[np.newaxis, :] * rhok
         A2 = I - yk[:, np.newaxis] * sk[np.newaxis, :] * rhok
         Hk = np.dot(A1, np.dot(Hk, A2)) + (rhok * sk[:, np.newaxis] *
                                                  sk[np.newaxis, :])
+
+        if k < 2:
+            print(A1)
 
     fval = old_fval
 

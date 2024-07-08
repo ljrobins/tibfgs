@@ -37,7 +37,7 @@ def test_fdiff():
         return fprime(ti.math.vec2([-1.0, 1.0]))
     
     g_ti = call_fdiff()
-    g_np = finite_difference_gradient(rosen_np, np.array([-1.0, 1.0], dtype=np.float32), finite_difference_stepsize=1e-4)
+    g_np = finite_difference_gradient(rosen_np, np.array([-1.0, 1.0], dtype=np.float32), finite_difference_stepsize=1e-5)
     assert np.allclose(g_ti, g_np)
 
 def test_dcstep():
@@ -69,7 +69,7 @@ def test_dcsearch():
     (ftol, gtol, xtol, stpmin, stpmax) = (0.0001, 0.9, 1e-7, 1e-10, 1e+10)
 
     f = rosen_np
-    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-4)
+    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-5)
 
     gfk = fprime(x0)
 
@@ -216,7 +216,7 @@ def test_bfgs():
     from .tibfgs import minimize_bfgs as minimize_bfgs_ti
 
     x0 = np.array([-1.0, 1.0])
-    res = minimize_bfgs_np(rosen_np, x0, eps=1e-4)
+    res = minimize_bfgs_np(rosen_np, x0, eps=1e-6)
 
     print(res)
 
