@@ -1,15 +1,13 @@
 import numpy as np
 from typing import Callable
 
-_epsilon = np.sqrt(np.finfo(float).eps)
-
 _status_message = {
-    "success": "Optimization terminated successfully.",
-    "maxfev": "Maximum number of function evaluations has " "been exceeded.",
-    "maxiter": "Maximum number of iterations has been " "exceeded.",
-    "pr_loss": "Desired error not necessarily achieved due " "to precision loss.",
-    "nan": "NaN result encountered.",
-    "out_of_bounds": "The result is outside of the provided " "bounds.",
+    'success': 'Optimization terminated successfully.',
+    'maxfev': 'Maximum number of function evaluations has ' 'been exceeded.',
+    'maxiter': 'Maximum number of iterations has been ' 'exceeded.',
+    'pr_loss': 'Desired error not necessarily achieved due ' 'to precision loss.',
+    'nan': 'NaN result encountered.',
+    'out_of_bounds': 'The result is outside of the provided ' 'bounds.',
 }
 
 
@@ -182,7 +180,7 @@ def minimize_bfgs(
         if rhok_inv == 0.0:
             rhok = 1000.0
             if disp:
-                msg = "Divide-by-zero encountered: rhok assumed large"
+                msg = 'Divide-by-zero encountered: rhok assumed large'
         else:
             rhok = 1.0 / rhok_inv
 
@@ -200,15 +198,15 @@ def minimize_bfgs(
     fval = old_fval
 
     if warnflag == 2:
-        msg = _status_message["pr_loss"]
+        msg = _status_message['pr_loss']
     elif k >= maxiter:
         warnflag = 1
-        msg = _status_message["maxiter"]
+        msg = _status_message['maxiter']
     elif np.isnan(gnorm) or np.isnan(fval) or np.isnan(xk).any():
         warnflag = 3
-        msg = _status_message["nan"]
+        msg = _status_message['nan']
     else:
-        msg = _status_message["success"]
+        msg = _status_message['success']
 
     result = dict(
         fun=fval,
@@ -221,7 +219,7 @@ def minimize_bfgs(
         nit=k,
     )
     if retall:
-        result["allvecs"] = allvecs
+        result['allvecs'] = allvecs
     return result
 
 
@@ -367,7 +365,7 @@ def scalar_search_wolfe1(
 
     stp, phi1, phi0, task = dcsrch(alpha1, phi0=phi0, derphi0=derphi0, maxiter=maxiter)
 
-    if task[:4] != b"CONV":
+    if task[:4] != b'CONV':
         raise _LineSearchError()
 
     return stp, phi1, phi0
@@ -598,16 +596,16 @@ class DCSRCH:
         phi1 = phi0
         derphi1 = derphi0
 
-        task = b"START"
+        task = b'START'
         for _i in range(maxiter):
             stp, phi1, derphi1, task = self._iterate(alpha1, phi1, derphi1, task)
 
             if not np.isfinite(stp):
-                task = b"WARN"
+                task = b'WARN'
                 stp = None
                 break
 
-            if task[:2] == b"FG":
+            if task[:2] == b'FG':
                 alpha1 = stp
                 phi1 = self.phi(stp)
                 derphi1 = self.derphi(stp)
@@ -616,9 +614,9 @@ class DCSRCH:
         else:
             # maxiter reached, the line search did not converge
             stp = None
-            task = b"WARNING: dcsrch did not converge within max iterations"
+            task = b'WARNING: dcsrch did not converge within max iterations'
 
-        if task[:5] == b"ERROR" or task[:4] == b"WARN":
+        if task[:5] == b'ERROR' or task[:4] == b'WARN':
             stp = None  # failed
 
         return stp, phi1, phi0, task
@@ -675,25 +673,25 @@ class DCSRCH:
         xtrapl = 1.1
         xtrapu = 4.0
 
-        if task[:5] == b"START":
+        if task[:5] == b'START':
             if stp < self.stpmin:
-                task = b"ERROR: STP .LT. STPMIN"
+                task = b'ERROR: STP .LT. STPMIN'
             if stp > self.stpmax:
-                task = b"ERROR: STP .GT. STPMAX"
+                task = b'ERROR: STP .GT. STPMAX'
             if g >= 0:
-                task = b"ERROR: INITIAL G .GE. ZERO"
+                task = b'ERROR: INITIAL G .GE. ZERO'
             if self.ftol < 0:
-                task = b"ERROR: FTOL .LT. ZERO"
+                task = b'ERROR: FTOL .LT. ZERO'
             if self.gtol < 0:
-                task = b"ERROR: GTOL .LT. ZERO"
+                task = b'ERROR: GTOL .LT. ZERO'
             if self.xtol < 0:
-                task = b"ERROR: XTOL .LT. ZERO"
+                task = b'ERROR: XTOL .LT. ZERO'
             if self.stpmin < 0:
-                task = b"ERROR: STPMIN .LT. ZERO"
+                task = b'ERROR: STPMIN .LT. ZERO'
             if self.stpmax < self.stpmin:
-                task = b"ERROR: STPMAX .LT. STPMIN"
+                task = b'ERROR: STPMAX .LT. STPMIN'
 
-            if task[:5] == b"ERROR":
+            if task[:5] == b'ERROR':
                 return stp, f, g, task
 
             # Initialize local variables.
@@ -721,7 +719,7 @@ class DCSRCH:
             self.gy = self.ginit
             self.stmin = 0
             self.stmax = stp + xtrapu * stp
-            task = b"FG"
+            task = b'FG'
             return stp, f, g, task
 
         # in the original Fortran this was a location to restore variables
@@ -736,20 +734,20 @@ class DCSRCH:
 
         # test for warnings
         if self.brackt and (stp <= self.stmin or stp >= self.stmax):
-            task = b"WARNING: ROUNDING ERRORS PREVENT PROGRESS"
+            task = b'WARNING: ROUNDING ERRORS PREVENT PROGRESS'
         if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
-            task = b"WARNING: XTOL TEST SATISFIED"
+            task = b'WARNING: XTOL TEST SATISFIED'
         if stp == self.stpmax and f <= ftest and g <= self.gtest:
-            task = b"WARNING: STP = STPMAX"
+            task = b'WARNING: STP = STPMAX'
         if stp == self.stpmin and (f > ftest or g >= self.gtest):
-            task = b"WARNING: STP = STPMIN"
+            task = b'WARNING: STP = STPMIN'
 
         # test for convergence
         if f <= ftest and abs(g) <= self.gtol * -self.ginit:
-            task = b"CONVERGENCE"
+            task = b'CONVERGENCE'
 
         # test for termination
-        if task[:4] == b"WARN" or task[:4] == b"CONV":
+        if task[:4] == b'WARN' or task[:4] == b'CONV':
             return stp, f, g, task
 
         # A modified function is used to predict the step during the
@@ -767,7 +765,7 @@ class DCSRCH:
             # Call dcstep to update stx, sty, and to compute the new step.
             # dcstep can have several operations which can produce NaN
             # e.g. inf/inf. Filter these out.
-            with np.errstate(invalid="ignore", over="ignore"):
+            with np.errstate(invalid='ignore', over='ignore'):
                 tup = dcstep(
                     self.stx,
                     fxm,
@@ -795,7 +793,7 @@ class DCSRCH:
             # dcstep can have several operations which can produce NaN
             # e.g. inf/inf. Filter these out.
 
-            with np.errstate(invalid="ignore", over="ignore"):
+            with np.errstate(invalid='ignore', over='ignore'):
                 tup = dcstep(
                     self.stx,
                     self.fx,
@@ -849,7 +847,7 @@ class DCSRCH:
             stp = self.stx
 
         # Obtain another function and derivative
-        task = b"FG"
+        task = b'FG'
         return stp, f, g, task
 
 

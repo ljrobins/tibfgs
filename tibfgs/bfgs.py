@@ -10,9 +10,8 @@ def set_f(func: Callable) -> None:
     f = func
 
 
-N: ti.u8 = int(os.environ["TI_DIM_X"])
-NPART: ti.i32 = int(os.environ["TI_NUM_PARTICLES"])
-
+N: ti.u8 = int(os.environ['TI_DIM_X'])
+NPART: ti.i32 = int(os.environ['TI_NUM_PARTICLES'])
 
 MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f32)
 VTYPE = ti.types.vector(n=N, dtype=ti.f32)
@@ -33,8 +32,8 @@ def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> 
     g = VTYPE(0.0)
     fx0 = f(x0)
 
-    p = VTYPE(0.0)
     for pind in range(N):
+        p = VTYPE(0.0)
         p[pind] = finite_difference_stepsize
         g[pind] = (f(x0 + p) - fx0) / finite_difference_stepsize
         p[pind] = 0.0
@@ -208,7 +207,7 @@ def scalar_search_wolfe1(
     dcsrch = DCSRCH(
         xk=xk, pk=pk, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax, i=i
     )
-    stp, phi1, phi0, task = dcsrch.call(alpha1, phi0=phi0, derphi0=derphi0, maxiter=100)
+    stp, phi1, phi0, task = dcsrch.call(alpha1, phi0=phi0, derphi0=derphi0, maxiter=10)
 
     return stp, phi1, phi0, task
 
@@ -739,9 +738,6 @@ def minimize_bfgs(
             c2=c2,
             xtol=xrtol,
         )
-        # if k == 0:
-        #     print(xk, pk, gfk, old_fval, old_old_fval)
-        #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
 
         if task != TASK_CONVERGENCE:
             # Line search failed to find a better solution.
@@ -780,7 +776,7 @@ def minimize_bfgs(
         rhok: ti.f32 = 0.0  # to be overwritten
         if rhok_inv == 0.0:
             rhok = 1000.0
-            print("Divide-by-zero encountered: rhok assumed large")
+            print('Divide-by-zero encountered: rhok assumed large')
         else:
             rhok = 1.0 / rhok_inv
 
@@ -791,7 +787,7 @@ def minimize_bfgs(
 
     fval = old_fval
 
-    if ki >= maxiter-1:
+    if ki >= maxiter - 1:
         warnflag = 1
     elif ti.math.isnan(gnorm) or ti.math.isnan(fval) or ti.math.isnan(xk).any():
         warnflag = 3

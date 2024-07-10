@@ -21,11 +21,8 @@ def ackley(x: ti.math.vec2) -> ti.f32:
 
 def ackley_np(x: np.ndarray) -> np.ndarray:
     return (
-        -20 * ti.exp(-0.2 * ti.sqrt(0.5 * np.linalg.norm(x, axis=1)))
-        - ti.exp(
-            0.5 * ti.cos(2 * ti.math.pi * x[:, 0])
-            + 0.5 * ti.cos(2 * ti.math.pi * x[:, 1])
-        )
-        + ti.math.e
+        -20 * np.exp(-0.2 * np.sqrt(0.5 * np.linalg.norm(x)))
+        - np.exp(0.5 * np.cos(2 * np.pi * x[0]) + 0.5 * np.cos(2 * np.pi * x[1]))
+        + np.e
         + 20
     )
