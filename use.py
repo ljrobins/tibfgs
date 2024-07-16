@@ -2,11 +2,19 @@ import matplotlib.pyplot as plt
 import tibfgs
 import time
 import numpy as np
+import taichi as ti
 
-x0 = 4 * np.random.rand(100000, 2) - 2
+x0 = 4 * np.random.rand(int(1e4), 2) - 2
 t1 = time.time()
-res_dict = tibfgs.minimize(tibfgs.ackley, x0)
+res_dict = tibfgs.minimize(tibfgs.ackley, x0, gtol=1e-1, eps=1e-5, arch=ti.metal)
 print(1 / ((time.time() - t1) / 1e6))
+
+ti.reset()
+x0 = 4 * np.random.rand(int(1e4), 2) - 2
+t1 = time.time()
+res_dict = tibfgs.minimize(tibfgs.ackley, x0, gtol=1e-1, eps=1e-5, arch=ti.metal)
+print(1 / ((time.time() - t1) / 1e6))
+
 
 xx, yy = np.meshgrid(np.linspace(-3, 3, 256), np.linspace(-3, 3, 256))
 x = np.dstack((xx.flatten(), yy.flatten())).T

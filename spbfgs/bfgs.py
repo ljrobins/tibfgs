@@ -16,14 +16,14 @@ class _LineSearchError(RuntimeError):
 
 
 def finite_difference_gradient(
-    f: Callable, x0: np.ndarray, finite_difference_stepsize: float
+    f: Callable, x0: np.ndarray, eps: float
 ) -> np.ndarray:
     g = np.zeros_like(x0)
     fx0 = f(x0)
     for pind in range(x0.size):
         p = np.zeros_like(x0)
-        p[pind] = finite_difference_stepsize
-        g[pind] = (f(x0 + p) - fx0) / finite_difference_stepsize
+        p[pind] = eps
+        g[pind] = (f(x0 + p) - fx0) / eps
     return g
 
 
@@ -100,7 +100,7 @@ def minimize_bfgs(
 
     f = fun
     myfprime = lambda x: finite_difference_gradient(
-        f, x, finite_difference_stepsize=eps
+        f, x, eps=eps
     )
 
     old_fval = f(x0)

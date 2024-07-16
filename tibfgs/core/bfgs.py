@@ -1,18 +1,17 @@
 import taichi as ti
 import os
 from typing import Callable
-import numpy as np
 
 N: ti.u8 = int(os.environ['TI_DIM_X'])
 NPART: ti.i32 = int(os.environ['TI_NUM_PARTICLES'])
 
 MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f32)
 VTYPE = ti.types.vector(n=N, dtype=ti.f32)
-V2ITYPE = ti.types.vector(n=2, dtype=ti.i32)
+
 EVAL_COUNTS = ti.field(
-    dtype=V2ITYPE, shape=(NPART,)
+    dtype=ti.types.vector(n=2, dtype=ti.i32), shape=NPART
 )  # one for each particle, function eval count
-GVALS = ti.field(dtype=VTYPE, shape=(NPART,))  # gradient values
+GVALS = ti.field(dtype=VTYPE, shape=NPART)  # gradient values
 
 res = ti.types.struct(
     fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
@@ -20,22 +19,15 @@ res = ti.types.struct(
 
 res_field = ti.Struct.field(
     dict(fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
-    shape=(NPART,),
+    shape=NPART,
 )
-
-x0s = ti.field(dtype=VTYPE, shape=NPART)
-
-
-def fill_x0(x0_np: np.ndarray) -> None:
-    global x0s
-    x0s.from_numpy(x0_np.astype(np.float32))
 
 
 @ti.kernel
-def minimize_kernel() -> int:
-    for i in range(NPART):
+def minimize_kernel(x0s: ti.template(), gtol: ti.f32) -> int:
+    for i in x0s:
         fval, gfk, Hk, warnflag, xk, k = minimize_bfgs(
-            i=i, x0=x0s[i], gtol=1e-3, eps=1e-6
+            i=i, x0=x0s[i], gtol=gtol
         )
         res_field[i] = res(fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k)
     return 0
@@ -44,25 +36,27 @@ def minimize_kernel() -> int:
 f = None
 
 
-def set_f(func: Callable) -> None:
+def set_f(func: Callable, eps: float = 1e-5) -> None:
     global f
     f = func
+
+    os.environ['TI_BFGS_EPS'] = str(eps)
 
 
 @ti.func
 def fprime(x: VTYPE) -> VTYPE:
-    return two_point_gradient(x)
+    return two_point_gradient(x, eps=ti.static(float(os.environ['TI_BFGS_EPS'])))
 
 
 @ti.func
-def two_point_gradient(x0: VTYPE, finite_difference_stepsize: ti.f32 = 1e-5) -> VTYPE:
+def two_point_gradient(x0: VTYPE, eps: ti.f32) -> VTYPE:
     g = VTYPE(0.0)
     fx0 = f(x0)
 
     for pind in range(N):
         p = VTYPE(0.0)
-        p[pind] = finite_difference_stepsize
-        g[pind] = (f(x0 + p) - fx0) / finite_difference_stepsize
+        p[pind] = eps
+        g[pind] = (f(x0 + p) - fx0) / eps
         p[pind] = 0.0
     return g
 

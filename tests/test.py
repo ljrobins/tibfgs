@@ -19,7 +19,6 @@ def test_matnorm():
 
 
 def test_vecnorm():
-
     @ti.kernel
     def call_vecnorm_ti(ord: ti.f32) -> ti.f32:
         v = ti.Vector([1.0, 2.0, 3.0])
@@ -44,7 +43,7 @@ def test_fdiff():
     g_np = finite_difference_gradient(
         rosen_np,
         np.array([-1.0, 1.0], dtype=np.float32),
-        finite_difference_stepsize=1e-5,
+        eps=1e-5,
     )
     assert np.allclose(g_ti - g_np, 0 * g_np, atol=1e-2)
 
@@ -93,7 +92,7 @@ def test_dcsearch():
     (ftol, gtol, xtol, stpmin, stpmax) = (0.0001, 0.9, 1e-7, 1e-10, 1e10)
 
     f = rosen_np
-    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-5)
+    fprime = lambda x: finite_difference_gradient(f, x, eps=1e-5)
 
     gfk = fprime(x0)
 
@@ -168,7 +167,7 @@ def test_scalar_search_wolfe1():
         fc[0] += 1
         return f(xk + s * pk)
 
-    fprime = lambda x: finite_difference_gradient(f, x, finite_difference_stepsize=1e-4)
+    fprime = lambda x: finite_difference_gradient(f, x, eps=1e-4)
 
     def derphi(s):
         gval[0] = fprime(xk + s * pk)
@@ -231,7 +230,7 @@ def test_wolfe1():
     from spbfgs import line_search_wolfe1
 
     myfprime = lambda x: finite_difference_gradient(
-        f, x, finite_difference_stepsize=1e-4
+        f, x, eps=1e-4
     )
 
     tup_np = line_search_wolfe1(
