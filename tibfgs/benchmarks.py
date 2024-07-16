@@ -20,9 +20,11 @@ def ackley(x: ti.math.vec2) -> ti.f32:
 
 
 def ackley_np(x: np.ndarray) -> np.ndarray:
+    if x.size == 2:
+        x = x.reshape(2,1,1)
     return (
-        -20 * np.exp(-0.2 * np.sqrt(0.5 * np.linalg.norm(x)))
-        - np.exp(0.5 * np.cos(2 * np.pi * x[0]) + 0.5 * np.cos(2 * np.pi * x[1]))
+        -20 * np.exp(-0.2 * np.sqrt(0.5 * np.linalg.norm(x, axis=0, keepdims=True)))
+        - np.exp(0.5 * np.cos(2 * np.pi * x[0,:,:]) + 0.5 * np.cos(2 * np.pi * x[1,:,:]))
         + np.e
         + 20
-    )
+    ).squeeze()

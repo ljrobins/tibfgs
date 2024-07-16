@@ -1,63 +1,22 @@
 import matplotlib.pyplot as plt
 import os
-
-os.environ['TI_DIM_X'] = str(2)
-os.environ['TI_NUM_PARTICLES'] = str(int(1e5))
-
-import taichi as ti
-
-ti.init(
-    arch=ti.metal,
-    default_fp=ti.float32,
-    fast_math=True,
-    advanced_optimization=True,
-    num_compile_threads=32,
-    opt_level=3,
-)
-
-from tibfgs import (
-    NPART,
-    N,
-    minimize_bfgs,
-    ackley,
-    ackley_np,
-    set_f,
-    rosen,
-    VTYPE,
-    MTYPE,
-)
+import tibfgs
 import time
 import numpy as np
 import scipy
 import polars as pl
 
-set_f(ackley)
+NPART = 100_000
+x0 = 4 * np.random.rand(NPART,2) - 2
 
-res = ti.types.struct(
-    fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
-)
-
-res_field = ti.Struct.field(
-    dict(fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
-    shape=(NPART,),
-)
-
-
-@ti.kernel
-def run() -> int:
-    for i in range(NPART):
-        x0 = ti.math.vec2([4 * ti.random() - 2, 4 * ti.random() - 2])
-        fval, gfk, Hk, warnflag, xk, k = minimize_bfgs(i=i, x0=x0, gtol=1e-3, eps=1e-6)
-        res_field[i] = res(fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k)
-    return 0
-
-
-run()
+_ = tibfgs.minimize(tibfgs.ackley, x0)
 t1 = time.time()
-res_dict = res_field.to_numpy()
-run()
+res_dict = tibfgs.minimize(tibfgs.ackley, x0)
 ti_per_sec = 1 / ((time.time() - t1) / NPART)
 print(ti_per_sec)
+
+print(res_dict)
+endd
 
 n_scipy = 20
 
@@ -69,14 +28,13 @@ methods = [
     'COBYQA',
     'TNC',
     'SLSQP',
-    'trust-constr',
     'CG',
 ]
 results_sp = []
 for method in methods:
     res = scipy.optimize.minimize(
-        fun=ackley_np,
-        x0=[4 * np.random.rand() - 2, 4 * np.random.rand() - 2],
+        fun=tibfgs.ackley_np,
+        x0=x0[0],
         method=method,
     )
     t1 = time.time()
@@ -84,8 +42,8 @@ for method in methods:
     n_fev = []
     for i in range(n_scipy):
         sol = scipy.optimize.minimize(
-            fun=ackley_np,
-            x0=[4 * np.random.rand() - 2, 4 * np.random.rand() - 2],
+            fun=tibfgs.ackley_np,
+            x0=x0[i],
             method=method,
         )
         n_iter.append(sol['nit'])
