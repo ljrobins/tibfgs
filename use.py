@@ -1,10 +1,9 @@
 import matplotlib.pyplot as plt
-import os
 import tibfgs
 import time
 import numpy as np
 
-x0 = 4 * np.random.rand(100000,2) - 2
+x0 = 4 * np.random.rand(100000, 2) - 2
 t1 = time.time()
 res_dict = tibfgs.minimize(tibfgs.ackley, x0)
 print(1 / ((time.time() - t1) / 1e6))

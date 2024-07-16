@@ -1,6 +1,7 @@
-from spbfgs import vecnorm, rosen as rosen_np, finite_difference_gradient
+from spbfgs import vecnorm as svecnorm, rosen as rosen_np, finite_difference_gradient
 import numpy as np
-from tibfgs import matnorm, VTYPE, MTYPE, rosen as rosen_ti, set_f
+from tibfgs import rosen as rosen_ti
+from tibfgs.core import matnorm, VTYPE, MTYPE, set_f, vecnorm as tvecnorm
 import taichi as ti
 import time
 
@@ -13,17 +14,16 @@ def test_matnorm():
         m = MTYPE([[-1.0, 1.0], [2.0, 3.0]])
         return matnorm(m, ord=ord)
 
-    assert np.allclose(call_matnorm_ti(ti.math.inf), vecnorm(m, ord=np.inf))
-    assert np.allclose(call_matnorm_ti(-ti.math.inf), vecnorm(m, ord=-np.inf))
+    assert np.allclose(call_matnorm_ti(ti.math.inf), svecnorm(m, ord=np.inf))
+    assert np.allclose(call_matnorm_ti(-ti.math.inf), svecnorm(m, ord=-np.inf))
 
 
 def test_vecnorm():
-    from tibfgs import vecnorm
 
     @ti.kernel
     def call_vecnorm_ti(ord: ti.f32) -> ti.f32:
         v = ti.Vector([1.0, 2.0, 3.0])
-        return vecnorm(v, ord=ord)
+        return tvecnorm(v, ord=ord)
 
     assert np.allclose(call_vecnorm_ti(ti.math.inf), 3)
     assert np.allclose(call_vecnorm_ti(-ti.math.inf), 1)
@@ -32,9 +32,9 @@ def test_vecnorm():
 
 
 def test_fdiff():
-    from tibfgs import fprime
-
     set_f(rosen_ti)
+
+    from tibfgs.core import fprime
 
     @ti.kernel
     def call_fdiff() -> VTYPE:
@@ -52,7 +52,7 @@ def test_fdiff():
 def test_dcstep():
     set_f(rosen_ti)
     from spbfgs import dcstep as dcstep_sp
-    from tibfgs import dcstep as dcstep_ti
+    from tibfgs.core import dcstep as dcstep_ti
 
     stx, fx, dx, sty, fy, dy, stp, fp, dp, brackt, stpmin, stpmax = (
         0.0,
@@ -279,7 +279,7 @@ def test_wolfe1():
 
 def test_bfgs():
     from spbfgs import minimize_bfgs as minimize_bfgs_np
-    from tibfgs import minimize_bfgs as minimize_bfgs_ti, NPART
+    from tibfgs.core import minimize_bfgs as minimize_bfgs_ti, NPART
 
     x0 = np.array([-1.0, 1.0])
     res = minimize_bfgs_np(rosen_np, x0, eps=1e-6)

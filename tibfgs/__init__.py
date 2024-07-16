@@ -1,7 +1,8 @@
 import sys
 
-if not 'taichi' in sys.modules:
+if 'taichi' not in sys.modules:
     import taichi as ti
+
     ti.init(
         arch=ti.gpu,
         default_fp=ti.float32,

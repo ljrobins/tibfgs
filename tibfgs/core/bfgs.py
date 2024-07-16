@@ -25,6 +25,7 @@ res_field = ti.Struct.field(
 
 x0s = ti.field(dtype=VTYPE, shape=NPART)
 
+
 def fill_x0(x0_np: np.ndarray) -> None:
     global x0s
     x0s.from_numpy(x0_np.astype(np.float32))
@@ -33,15 +34,20 @@ def fill_x0(x0_np: np.ndarray) -> None:
 @ti.kernel
 def minimize_kernel() -> int:
     for i in range(NPART):
-        fval, gfk, Hk, warnflag, xk, k = minimize_bfgs(i=i, x0=x0s[i], gtol=1e-3, eps=1e-6)
+        fval, gfk, Hk, warnflag, xk, k = minimize_bfgs(
+            i=i, x0=x0s[i], gtol=1e-3, eps=1e-6
+        )
         res_field[i] = res(fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k)
     return 0
 
+
 f = None
+
 
 def set_f(func: Callable) -> None:
     global f
     f = func
+
 
 @ti.func
 def fprime(x: VTYPE) -> VTYPE:

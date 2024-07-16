@@ -1,13 +1,11 @@
-import matplotlib.pyplot as plt
-import os
 import tibfgs
 import time
 import numpy as np
 import scipy
 import polars as pl
 
-NPART = 100_000
-x0 = 4 * np.random.rand(NPART,2) - 2
+NPART = 1000_000
+x0 = 4 * np.random.rand(NPART, 2) - 2
 
 _ = tibfgs.minimize(tibfgs.ackley, x0)
 t1 = time.time()
@@ -16,7 +14,6 @@ ti_per_sec = 1 / ((time.time() - t1) / NPART)
 print(ti_per_sec)
 
 print(res_dict)
-endd
 
 n_scipy = 20
 
