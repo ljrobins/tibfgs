@@ -6,7 +6,9 @@ import time
 x0 = np.random.rand(int(1e6), 2)
 
 t1 = time.time()
-res = tibfgs.minimize(tibfgs.ackley, x0, arch=ti.cpu, maxiter=10, maxfeval=500, discard_failures=True)
+res = tibfgs.minimize(
+    tibfgs.ackley, x0, arch=ti.cpu, maxiter=10, maxfeval=500, discard_failures=True
+)
 dt = time.time() - t1
 
 

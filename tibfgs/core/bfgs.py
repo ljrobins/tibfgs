@@ -43,9 +43,13 @@ FLAG_MAX_FEVAL = ti.cast(5, ti.u8)
 
 
 @ti.kernel
-def minimize_kernel(x0s: ti.template(), gtol: ti.f32, maxiter: ti.u16, maxfeval: ti.u16) -> int:
+def minimize_kernel(
+    x0s: ti.template(), gtol: ti.f32, maxiter: ti.u16, maxfeval: ti.u16
+) -> int:
     for i in x0s:
-        res_field[i] = minimize_bfgs(i=i, x0=x0s[i], gtol=gtol, maxiter=maxiter, maxfeval=maxfeval)
+        res_field[i] = minimize_bfgs(
+            i=i, x0=x0s[i], gtol=gtol, maxiter=maxiter, maxfeval=maxfeval
+        )
     return 0
 
 
@@ -779,7 +783,7 @@ def minimize_bfgs(
     geval = 0
     gnorm = vecnorm(gfk, ord=norm)
     ti.loop_config(serialize=True)
-    for k in range(maxiter):
+    for _ in range(maxiter):
         pk = -Hk @ gfk
         alpha_k, fc, gc, old_fval, old_old_fval, gfkp1, task = line_search_wolfe1(
             i,

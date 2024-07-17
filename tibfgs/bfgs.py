@@ -11,6 +11,7 @@ FLAG_NAN_MSG = 'NaN result encountered'
 FLAG_ERROR_MSG = 'Error occured during optimization'
 FLAG_MAX_FEVAL_MSG = 'Max function evaluations exceeded'
 
+
 def minimize(
     fun: Callable,
     x0: np.ndarray,
@@ -46,10 +47,6 @@ def minimize(
         res_field,
         VTYPE,
         NPART,
-        FLAG_MAX_ITER,
-        FLAG_NAN,
-        FLAG_PRECISION_LOSS,
-        FLAG_SUCCESS,
     )
 
     set_f(fun, eps=eps)
