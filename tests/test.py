@@ -1,9 +1,17 @@
+import os
+
+os.environ['TI_DIM_X'] = str(2)
+os.environ['TI_NUM_PARTICLES'] = str(int(1e5))
+
 from spbfgs import vecnorm as svecnorm, rosen as rosen_np, finite_difference_gradient
 import numpy as np
+import taichi as ti
+ti.init(arch=ti.gpu)
+
 from tibfgs import rosen as rosen_ti
 from tibfgs.core import matnorm, VTYPE, MTYPE, set_f, vecnorm as tvecnorm
-import taichi as ti
 import time
+
 
 
 def test_matnorm():
@@ -86,7 +94,7 @@ def test_dcstep():
 def test_dcsearch():
     set_f(rosen_ti)
     from spbfgs import DCSRCH as DCSRCH_np
-    from tibfgs import DCSRCH as DCSRCH_ti
+    from tibfgs.core import DCSRCH as DCSRCH_ti
 
     x0 = np.array([-1.0, 1.0])
     (ftol, gtol, xtol, stpmin, stpmax) = (0.0001, 0.9, 1e-7, 1e-10, 1e10)
@@ -190,7 +198,7 @@ def test_scalar_search_wolfe1():
         c2=0.9,
     )
 
-    from tibfgs import (
+    from tibfgs.core import (
         scalar_search_wolfe1 as scalar_search_wolfe1_ti,
     )
 
@@ -247,7 +255,7 @@ def test_wolfe1():
 
     print(tup_np)
 
-    from tibfgs import line_search_wolfe1 as ti_line_search_wolfe1
+    from tibfgs.core import line_search_wolfe1 as ti_line_search_wolfe1
 
     @ti.kernel
     def call_ti_line_search() -> ti.types.vector(n=4, dtype=ti.f32):
@@ -276,27 +284,18 @@ def test_wolfe1():
 
 def test_bfgs():
     from spbfgs import minimize_bfgs as minimize_bfgs_np
-    from tibfgs.core import minimize_bfgs as minimize_bfgs_ti, NPART
+    from tibfgs.core import minimize_bfgs as minimize_bfgs_ti, NPART, res_field
 
     x0 = np.array([-1.0, 1.0])
-    res = minimize_bfgs_np(rosen_np, x0, eps=1e-6)
+    res = minimize_bfgs_np(rosen_np, x0, eps=1e-5)
     t1 = time.time()
     for _i in range(100):
-        res = minimize_bfgs_np(rosen_np, x0, eps=1e-6)
+        res = minimize_bfgs_np(rosen_np, x0, eps=1e-5)
     print(1 / ((time.time() - t1) / 100))
 
     print(res)
 
     set_f(rosen_ti)
-
-    res = ti.types.struct(
-        fun=ti.f32, grad=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
-    )
-
-    res_field = ti.Struct.field(
-        dict(fun=ti.f32, grad=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
-        shape=(NPART,),
-    )
 
     @ti.kernel
     def run() -> int:
@@ -309,11 +308,8 @@ def test_bfgs():
         Hk = MTYPE([[0.0, 0.0], [0.0, 0.0]])
         for i in range(NPART):
             x0 = ti.math.vec2([ti.random(), ti.random()])
-            fval, gfk, Hk, warnflag, xk, k = minimize_bfgs_ti(
+            res_field[i] = minimize_bfgs_ti(
                 i=i, x0=x0, gtol=1e-3, eps=1e-6
-            )
-            res_field[i] = res(
-                fun=fval, grad=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k
             )
         return 0
 
@@ -321,3 +317,13 @@ def test_bfgs():
     run()
     print(1 / ((time.time() - t1) / 1e6))
     print(res_field.xk)
+
+if __name__ == "__main__":
+    test_matnorm()
+    test_vecnorm()
+    test_fdiff()
+    test_dcstep()
+    # test_dcsearch()
+    # test_scalar_search_wolfe1()
+    # test_wolfe1()
+    test_bfgs()

@@ -11,6 +11,22 @@ FLAG_NAN_MSG = 'NaN result encountered'
 FLAG_ERROR_MSG = 'Error occured during optimization'
 FLAG_MAX_FEVAL_MSG = 'Max function evaluations exceeded'
 
+_default_taichi_kwargs = dict(
+    arch=ti.gpu,
+    default_fp=ti.float32,
+    fast_math=False,
+    advanced_optimization=False,
+    num_compile_threads=32,
+    opt_level=1,
+    cfg_optimization=False,
+)
+
+def init_ti(**kwargs):
+    if not 'TI_BFGS_INIT' in os.environ:
+        np.finfo(np.float32)
+        _default_taichi_kwargs.update(kwargs)
+        ti.init(**_default_taichi_kwargs)
+        os.environ['TI_BFGS_INIT'] = 'True'
 
 def minimize(
     fun: Callable,
@@ -22,24 +38,13 @@ def minimize(
     discard_failures: bool = False,
     **taichi_kwargs: dict,
 ) -> pl.DataFrame:
-    _default_taichi_kwargs = dict(
-        arch=ti.gpu,
-        default_fp=ti.float32,
-        fast_math=False,
-        advanced_optimization=False,
-        num_compile_threads=32,
-        opt_level=1,
-        cfg_optimization=False,
-    )
-
-    _default_taichi_kwargs.update(taichi_kwargs)
-
-    ti.init(**_default_taichi_kwargs)
 
     assert x0.ndim == 2
 
     os.environ['TI_DIM_X'] = str(x0.shape[1])
     os.environ['TI_NUM_PARTICLES'] = str(x0.shape[0])
+
+    init_ti(**taichi_kwargs)
 
     from .core import (
         set_f,

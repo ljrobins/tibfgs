@@ -56,7 +56,7 @@ def minimize_kernel(
 f = None
 
 
-def set_f(func: Callable, eps) -> None:
+def set_f(func: Callable, eps: float = 1e-5) -> None:
     global f
     f = func
 
