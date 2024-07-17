@@ -13,30 +13,46 @@ EVAL_COUNTS = ti.field(
 )  # one for each particle, function eval count
 GVALS = ti.field(dtype=VTYPE, shape=NPART)  # gradient values
 
-res = ti.types.struct(
-    fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
+res_dict = dict(
+    fun=ti.f32,
+    xk=VTYPE,
+    x0=VTYPE,
+    status=ti.u8,
+    task=ti.u8,
+    k=ti.u16,
+    grad=VTYPE,
+    hess_inv=MTYPE,
+    feval=ti.i32,
+    geval=ti.i32,
 )
 
+res = ti.types.struct(**res_dict)
+
 res_field = ti.Struct.field(
-    dict(fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
+    res_dict,
     shape=NPART,
 )
 
 
+FLAG_SUCCESS = ti.cast(0, ti.u8)
+FLAG_MAX_ITER = ti.cast(1, ti.u8)
+FLAG_PRECISION_LOSS = ti.cast(2, ti.u8)
+FLAG_NAN = ti.cast(3, ti.u8)
+FLAG_ERROR = ti.cast(4, ti.u8)
+FLAG_MAX_FEVAL = ti.cast(5, ti.u8)
+
+
 @ti.kernel
-def minimize_kernel(x0s: ti.template(), gtol: ti.f32) -> int:
+def minimize_kernel(x0s: ti.template(), gtol: ti.f32, maxiter: ti.u16, maxfeval: ti.u16) -> int:
     for i in x0s:
-        fval, gfk, Hk, warnflag, xk, k = minimize_bfgs(
-            i=i, x0=x0s[i], gtol=gtol
-        )
-        res_field[i] = res(fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k)
+        res_field[i] = minimize_bfgs(i=i, x0=x0s[i], gtol=gtol, maxiter=maxiter, maxfeval=maxfeval)
     return 0
 
 
 f = None
 
 
-def set_f(func: Callable, eps: float = 1e-5) -> None:
+def set_f(func: Callable, eps) -> None:
     global f
     f = func
 
@@ -144,6 +160,7 @@ def line_search_wolfe1(
     """
     # FCOUNT[i] = 0
     # GCOUNT[i] = 0
+    EVAL_COUNTS[i] = [0, 0]
 
     derphi0 = ti.math.dot(gfk, pk)
 
@@ -244,12 +261,27 @@ def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
 
 
 TASK_START = ti.cast(0, ti.u8)
-TASK_WARNING = ti.cast(1, ti.u8)
 TASK_FG = ti.cast(2, ti.u8)
-TASK_ERROR = ti.cast(3, ti.u8)
-TASK_CONVERGENCE = ti.cast(4, ti.u8)
-TASK_MAX_ITER_WARNING = ti.cast(5, ti.u8)
-TASK_MAX_INF_STP = ti.cast(6, ti.u8)
+TASK_CONVERGENCE = ti.cast(1, ti.u8)
+
+TASK_ERROR = ti.cast(200, ti.u8)
+TASK_ERROR_STP_LT_STPMIN = ti.cast(201, ti.u8)
+TASK_ERROR_STP_GT_STPMAX = ti.cast(202, ti.u8)
+TASK_ERROR_IG_GE_ZERO = ti.cast(203, ti.u8)
+TASK_ERROR_FTOL_LT_ZERO = ti.cast(204, ti.u8)
+TASK_ERROR_GTOL_LT_ZERO = ti.cast(205, ti.u8)
+TASK_ERROR_XTOL_LT_ZERO = ti.cast(206, ti.u8)
+TASK_ERROR_STPMIN_LT_ZERO = ti.cast(207, ti.u8)
+TASK_ERROR_STPMAX_LT_STPMIN = ti.cast(208, ti.u8)
+
+
+TASK_WARNING = ti.cast(100, ti.u8)
+TASK_MAX_ITER_WARNING = ti.cast(101, ti.u8)
+TASK_MAX_INF_STP = ti.cast(102, ti.u8)
+TASK_WARNING_ROUNDING = ti.cast(103, ti.u8)
+TASK_WARNING_XTOL = ti.cast(104, ti.u8)
+TASK_WARNING_STP_EQ_STPMAX = ti.cast(105, ti.u8)
+TASK_WARNING_STP_EQ_STPMIN = ti.cast(106, ti.u8)
 
 
 @ti.dataclass
@@ -365,24 +397,24 @@ class DCSRCH:
         skip = False
 
         if task == TASK_START:
-            if stp < self.stpmin:
-                task = TASK_ERROR
-            if stp > self.stpmax:
-                task = TASK_ERROR
-            if g >= 0:
-                task = TASK_ERROR
-            if self.ftol < 0:
-                task = TASK_ERROR
-            if self.gtol < 0:
-                task = TASK_ERROR
-            if self.xtol < 0:
-                task = TASK_ERROR
-            if self.stpmin < 0:
-                task = TASK_ERROR
-            if self.stpmax < self.stpmin:
-                task = TASK_ERROR
+            if stp < self.stpmin:  # STP .LT. STPMIN
+                task = TASK_ERROR_STP_LT_STPMIN
+            if stp > self.stpmax:  # STP .GT. STPMAX
+                task = TASK_ERROR_STP_GT_STPMAX
+            if g >= 0:  # INITIAL G .GE. ZERO
+                task = TASK_ERROR_IG_GE_ZERO
+            if self.ftol < 0:  # FTOL .LT. ZERO
+                task = TASK_ERROR_FTOL_LT_ZERO
+            if self.gtol < 0:  # GTOL .LT. ZERO
+                task = TASK_ERROR_GTOL_LT_ZERO
+            if self.xtol < 0:  # XTOL .LT. ZERO
+                task = TASK_ERROR_XTOL_LT_ZERO
+            if self.stpmin < 0:  # STPMIN .LT. ZERO
+                task = TASK_ERROR_STPMIN_LT_ZERO
+            if self.stpmax < self.stpmin:  # STPMAX .LT. STPMIN
+                task = TASK_ERROR_STPMAX_LT_STPMIN
 
-            if task == TASK_ERROR:
+            if task >= 200:  # if we're in the error range
                 skip = True
 
             # Initialize local variables.
@@ -426,24 +458,23 @@ class DCSRCH:
 
             # test for warnings
             if self.brackt and (stp <= self.stmin or stp >= self.stmax):
-                task = TASK_WARNING
+                task = TASK_WARNING_ROUNDING
                 # print("WARNING: ROUNDING ERRORS PREVENT PROGRESS")
             if self.brackt and self.stmax - self.stmin <= self.xtol * self.stmax:
-                task = TASK_WARNING
+                task = TASK_WARNING_XTOL
                 # print("WARNING: XTOL TEST SATISFIED")
             if stp == self.stpmax and f <= ftest and g <= self.gtest:
-                task = TASK_WARNING
-                print(103)
+                task = TASK_WARNING_STP_EQ_STPMAX
             if stp == self.stpmin and (f > ftest or g >= self.gtest):
-                task = TASK_WARNING
-                print(104)
+                task = TASK_WARNING_STP_EQ_STPMIN
 
             # test for convergence
             if f <= ftest and ti.abs(g) <= ti.abs(self.gtol * self.ginit):
                 task = TASK_CONVERGENCE
 
             # test for termination
-            if task == TASK_WARNING or task == TASK_CONVERGENCE:
+            if (task >= 100 and task < 200) or task == TASK_CONVERGENCE:
+                # if we're in the warning range (100-199) or we've converged
                 skip = True
 
             # A modified function is used to predict the step during the
@@ -725,10 +756,11 @@ def minimize_bfgs(
     norm: ti.f32 = ti.math.inf,
     eps: ti.f32 = 1e-6,
     maxiter: ti.u16 = 100,
+    maxfeval: ti.u16 = 1000,
     xrtol=1e-6,
     c1=1e-4,
     c2=0.9,
-):
+) -> res:
     old_fval = f(x0)
     gfk = fprime(x0)
 
@@ -740,8 +772,11 @@ def minimize_bfgs(
 
     xk = x0
 
-    warnflag = 0
+    warnflag = FLAG_SUCCESS
     ki = 0
+    task = 0
+    feval = 0
+    geval = 0
     gnorm = vecnorm(gfk, ord=norm)
     ti.loop_config(serialize=True)
     for k in range(maxiter):
@@ -759,10 +794,20 @@ def minimize_bfgs(
             c2=c2,
             xtol=xrtol,
         )
+        feval += fc
+        geval += gc
+
+        if feval >= maxfeval:
+            warnflag = FLAG_MAX_FEVAL
+            break
+
+        if task >= 200:  # if we're in the error range
+            warnflag = FLAG_ERROR
+            break
 
         if task != TASK_CONVERGENCE:
             # Line search failed to find a better solution.
-            warnflag = 2
+            warnflag = FLAG_PRECISION_LOSS
             break
 
         sk = alpha_k * pk
@@ -787,7 +832,7 @@ def minimize_bfgs(
         if ti.math.isinf(old_fval):
             # We correctly found +-Inf as optimal value, or something went
             # wrong.
-            warnflag = 2
+            warnflag = FLAG_PRECISION_LOSS
             break
 
         rhok_inv = ti.math.dot(yk, sk)
@@ -804,13 +849,24 @@ def minimize_bfgs(
         A1 = eye - sk.outer_product(yk) * rhok
         A2 = eye - yk.outer_product(sk) * rhok
         Hk = A1 @ (Hk @ A2) + rhok * sk.outer_product(sk)
-        ki = k
+        ki += 1
 
     fval = old_fval
 
-    if ki >= maxiter - 1:
-        warnflag = 1
+    if ki == maxiter:
+        warnflag = FLAG_MAX_ITER
     elif ti.math.isnan(gnorm) or ti.math.isnan(fval) or ti.math.isnan(xk).any():
-        warnflag = 3
+        warnflag = FLAG_NAN
 
-    return fval, gfk, Hk, warnflag, xk, ki
+    return res(
+        fun=fval,
+        xk=xk,
+        x0=x0,
+        status=warnflag,
+        task=task,
+        k=ki,
+        grad=gfk,
+        hess_inv=Hk,
+        feval=feval,
+        geval=geval,
+    )

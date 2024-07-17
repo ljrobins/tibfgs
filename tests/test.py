@@ -229,9 +229,7 @@ def test_wolfe1():
 
     from spbfgs import line_search_wolfe1
 
-    myfprime = lambda x: finite_difference_gradient(
-        f, x, eps=1e-4
-    )
+    myfprime = lambda x: finite_difference_gradient(f, x, eps=1e-4)
 
     tup_np = line_search_wolfe1(
         f=f,
@@ -292,11 +290,11 @@ def test_bfgs():
     set_f(rosen_ti)
 
     res = ti.types.struct(
-        fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
+        fun=ti.f32, grad=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32
     )
 
     res_field = ti.Struct.field(
-        dict(fun=ti.f32, jac=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
+        dict(fun=ti.f32, grad=VTYPE, hess_inv=MTYPE, status=ti.u8, xk=VTYPE, k=ti.u32),
         shape=(NPART,),
     )
 
@@ -315,7 +313,7 @@ def test_bfgs():
                 i=i, x0=x0, gtol=1e-3, eps=1e-6
             )
             res_field[i] = res(
-                fun=fval, jac=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k
+                fun=fval, grad=gfk, hess_inv=Hk, status=warnflag, xk=xk, k=k
             )
         return 0
 

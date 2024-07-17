@@ -15,9 +15,7 @@ class _LineSearchError(RuntimeError):
     pass
 
 
-def finite_difference_gradient(
-    f: Callable, x0: np.ndarray, eps: float
-) -> np.ndarray:
+def finite_difference_gradient(f: Callable, x0: np.ndarray, eps: float) -> np.ndarray:
     g = np.zeros_like(x0)
     fx0 = f(x0)
     for pind in range(x0.size):
@@ -40,7 +38,7 @@ def minimize_bfgs(
     fun,
     x0,
     args=(),
-    jac=None,
+    grad=None,
     callback=None,
     gtol=1e-5,
     norm=np.inf,
@@ -68,16 +66,16 @@ def minimize_bfgs(
     norm : float
         Order of norm (Inf is max, -Inf is min).
     eps : float or ndarray
-        If `jac is None` the absolute step size used for numerical
-        approximation of the jacobian via forward differences.
+        If `grad is None` the absolute step size used for numerical
+        approximation of the gradient via forward differences.
     return_all : bool, optional
         Set to True to return a list of the best solution at each of the
         iterations.
     finite_diff_rel_step : None or array_like, optional
-        If ``jac in ['2-point', '3-point', 'cs']`` the relative step size to
-        use for numerical approximation of the jacobian. The absolute step
+        If ``grad in ['2-point', '3-point', 'cs']`` the relative step size to
+        use for numerical approximation of the gradient. The absolute step
         size is computed as ``h = rel_step * sign(x) * max(1, abs(x))``,
-        possibly adjusted to fit into the bounds. For ``jac='3-point'``
+        possibly adjusted to fit into the bounds. For ``grad='3-point'``
         the sign of `h` is ignored. If None (default) then step is selected
         automatically.
     xrtol : float, default: 0
@@ -99,9 +97,7 @@ def minimize_bfgs(
         maxiter = len(x0) * 200
 
     f = fun
-    myfprime = lambda x: finite_difference_gradient(
-        f, x, eps=eps
-    )
+    myfprime = lambda x: finite_difference_gradient(f, x, eps=eps)
 
     old_fval = f(x0)
     gfk = myfprime(x0)
@@ -210,7 +206,7 @@ def minimize_bfgs(
 
     result = dict(
         fun=fval,
-        jac=gfk,
+        grad=gfk,
         hess_inv=Hk,
         status=warnflag,
         success=(warnflag == 0),
