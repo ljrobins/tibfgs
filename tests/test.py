@@ -6,12 +6,12 @@ os.environ['TI_NUM_PARTICLES'] = str(int(1e5))
 from spbfgs import vecnorm as svecnorm, rosen as rosen_np, finite_difference_gradient
 import numpy as np
 import taichi as ti
+
 ti.init(arch=ti.gpu)
 
 from tibfgs import rosen as rosen_ti
 from tibfgs.core import matnorm, VTYPE, MTYPE, set_f, vecnorm as tvecnorm
 import time
-
 
 
 def test_matnorm():
@@ -300,17 +300,9 @@ def test_bfgs():
     @ti.kernel
     def run() -> int:
         x0 = ti.math.vec2([-1.0, 1.0])
-        fval = 0.0
-        gfk = ti.math.vec2([0.0, 0.0])
-        warnflag = 0
-        xk = x0
-        k = 0
-        Hk = MTYPE([[0.0, 0.0], [0.0, 0.0]])
         for i in range(NPART):
             x0 = ti.math.vec2([ti.random(), ti.random()])
-            res_field[i] = minimize_bfgs_ti(
-                i=i, x0=x0, gtol=1e-3, eps=1e-6
-            )
+            res_field[i] = minimize_bfgs_ti(i=i, x0=x0, gtol=1e-3, eps=1e-6)
         return 0
 
     t1 = time.time()
@@ -318,7 +310,8 @@ def test_bfgs():
     print(1 / ((time.time() - t1) / 1e6))
     print(res_field.xk)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     test_matnorm()
     test_vecnorm()
     test_fdiff()

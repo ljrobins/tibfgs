@@ -13,6 +13,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.9"
 taichi = ">=0.0.1"
+polars = ">=0.0.1"
 
 [tool.poetry.urls]
 "Homepage" = "https://github.com/ljrobins/taichi-bfgs"

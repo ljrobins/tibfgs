@@ -21,12 +21,14 @@ _default_taichi_kwargs = dict(
     cfg_optimization=False,
 )
 
+
 def init_ti(**kwargs):
-    if not 'TI_BFGS_INIT' in os.environ:
+    if 'TI_BFGS_INIT' not in os.environ:
         np.finfo(np.float32)
         _default_taichi_kwargs.update(kwargs)
         ti.init(**_default_taichi_kwargs)
         os.environ['TI_BFGS_INIT'] = 'True'
+
 
 def minimize(
     fun: Callable,
@@ -38,7 +40,6 @@ def minimize(
     discard_failures: bool = False,
     **taichi_kwargs: dict,
 ) -> pl.DataFrame:
-
     assert x0.ndim == 2
 
     os.environ['TI_DIM_X'] = str(x0.shape[1])

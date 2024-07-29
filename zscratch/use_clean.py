@@ -11,7 +11,6 @@ res = tibfgs.minimize(
 )
 dt = time.time() - t1
 
-
 print(res.sort('fun').drop('gradient', 'hessian_inverse'))
 
 total_feval = res['feval'].sum()
