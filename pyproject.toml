@@ -2,7 +2,7 @@
 name = "tibfgs"
 version = "0.0.1"
 description = "Hardware-accelerated nonlinear optimization in Taichi"
-authors = ["Liam Robinson <robin502@purdue.edu>"]
+authors = ["Liam Robinson <liamers127@gmail.com>"]
 readme = "README.rst"
 packages = [{ include = "tibfgs" }]
 
