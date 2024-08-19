@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tibfgs"
-version = "0.0.1"
+version = "0.0.2"
 description = "Hardware-accelerated nonlinear optimization in Taichi"
 authors = ["Liam Robinson <liamers127@gmail.com>"]
 readme = "README.rst"
