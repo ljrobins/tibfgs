@@ -5,10 +5,6 @@ description = "Hardware-accelerated nonlinear optimization in Taichi"
 authors = ["Liam Robinson <robin502@purdue.edu>"]
 readme = "README.rst"
 packages = [{ include = "tibfgs" }]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: MacOS, Windows, Linux",
-]
 
 [tool.poetry.dependencies]
 python = ">=3.9"
