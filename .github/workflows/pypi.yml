@@ -23,6 +23,9 @@ jobs:
 
     - name: Build sdist
       run: python -m build --sdist
+    
+    - name: Check sdist
+      run: twine check dist/*
 
     - name: Publish to PyPI
       if: github.event_name == 'push'
