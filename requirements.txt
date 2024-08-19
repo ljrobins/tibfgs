@@ -11,10 +11,10 @@ mdurl==0.1.2
 numpy==2.0.0
     # via taichi
 polars==1.3.0
-    # via taichi-bfgs (pyproject.toml)
+    # via tibfgs (pyproject.toml)
 pygments==2.18.0
     # via rich
 rich==13.7.1
     # via taichi
 taichi==1.7.1
-    # via taichi-bfgs (pyproject.toml)
+    # via tibfgs (pyproject.toml)
