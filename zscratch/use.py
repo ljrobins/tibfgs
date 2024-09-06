@@ -22,7 +22,7 @@ def ackley(x: ti.math.vec2) -> ti.f32:
 # %%
 # Then we set up our initial conditions
 
-n_particles = int(1e6)
+n_particles = int(5e7)
 x0 = 4 * np.random.rand(n_particles, 2) - 2
 
 # %%

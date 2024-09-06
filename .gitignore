@@ -8,3 +8,4 @@ include
 .lock
 .ruff_cache
 *.txt
+.venv
