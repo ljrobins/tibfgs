@@ -36,7 +36,7 @@ print(f'M1 Mac: {n_particles / 1e6 / ((time.time() - t1)):.2f} million convergen
 # %%
 # We can look at the returned dataframe
 
-print(solution_df.tail()['message'][0])
+print(solution_df.tail())
 
 # %%
 # The full schema of the solution is given by:

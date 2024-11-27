@@ -45,8 +45,6 @@ def minimize(
     os.environ['TI_DIM_X'] = str(x0.shape[1])
     os.environ['TI_NUM_PARTICLES'] = str(x0.shape[0])
 
-    init_ti(**taichi_kwargs)
-
     from .core import (
         set_f,
         minimize_kernel,
