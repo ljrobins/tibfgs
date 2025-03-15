@@ -16,5 +16,5 @@ pygments==2.18.0
     # via rich
 rich==13.7.1
     # via taichi
-taichi==1.7.1
+taichi==1.7.2
     # via tibfgs (pyproject.toml)
