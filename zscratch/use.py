@@ -9,7 +9,7 @@ import taichi as ti
 # Let's solve a 2D non-linear, non-convex optimization problem from 1e6 initial conditions. First we define an objective function:
 
 @ti.func
-def ackley(x: ti.math.vec2) -> ti.f32:
+def ackley(x: ti.math.vec2) -> ti.f64:
     return (
         -20 * ti.exp(-0.2 * ti.sqrt(0.5 * x.norm_sqr()))
         - ti.exp(

@@ -18,7 +18,7 @@ def test_matnorm():
     m = np.array([[-1.0, 1.0], [2.0, 3.0]])
 
     @ti.kernel
-    def call_matnorm_ti(ord: ti.f32) -> ti.f32:
+    def call_matnorm_ti(ord: ti.f64) -> ti.f64:
         m = MTYPE([[-1.0, 1.0], [2.0, 3.0]])
         return matnorm(m, ord=ord)
 
@@ -28,7 +28,7 @@ def test_matnorm():
 
 def test_vecnorm():
     @ti.kernel
-    def call_vecnorm_ti(ord: ti.f32) -> ti.f32:
+    def call_vecnorm_ti(ord: ti.f64) -> ti.f64:
         v = ti.Vector([1.0, 2.0, 3.0])
         return tvecnorm(v, ord=ord)
 
@@ -50,7 +50,7 @@ def test_fdiff():
     g_ti = call_fdiff()
     g_np = finite_difference_gradient(
         rosen_np,
-        np.array([-1.0, 1.0], dtype=np.float32),
+        np.array([-1.0, 1.0], dtype=np.float64),
         eps=1e-5,
     )
     assert np.allclose(g_ti - g_np, 0 * g_np, atol=1e-2)
@@ -79,7 +79,7 @@ def test_dcstep():
     tup_sp = dcstep_sp(stx, fx, dx, sty, fy, dy, stp, fp, dp, brackt, stpmin, stpmax)
 
     @ti.kernel
-    def run_ti_dcstep() -> ti.types.vector(n=8, dtype=ti.f32):
+    def run_ti_dcstep() -> ti.types.vector(n=8, dtype=ti.f64):
         x = ti.Vector(
             dcstep_ti(stx, fx, dx, sty, fy, dy, stp, fp, dp, brackt, stpmin, stpmax)
         )
@@ -137,7 +137,7 @@ def test_dcsearch():
     set_f(rosen_ti)
 
     @ti.kernel
-    def run_ti_dcsrch() -> ti.types.vector(4, ti.f32):
+    def run_ti_dcsrch() -> ti.types.vector(4, ti.f64):
         i: ti.i32 = 1
         x = ti.Vector(
             DCSRCH_ti(VTYPE(xk), VTYPE(pk), ftol, gtol, xtol, stpmin, stpmax, i=i).call(
@@ -203,7 +203,7 @@ def test_scalar_search_wolfe1():
     )
 
     @ti.kernel
-    def run_ti() -> ti.types.vector(4, ti.f32):
+    def run_ti() -> ti.types.vector(4, ti.f64):
         x = ti.Vector(
             scalar_search_wolfe1_ti(
                 i=10,
@@ -258,7 +258,7 @@ def test_wolfe1():
     from tibfgs.core import line_search_wolfe1 as ti_line_search_wolfe1
 
     @ti.kernel
-    def call_ti_line_search() -> ti.types.vector(n=4, dtype=ti.f32):
+    def call_ti_line_search() -> ti.types.vector(n=4, dtype=ti.f64):
         xk = VTYPE(xkl)
         pk = VTYPE(pkl)
         gfk = VTYPE(gfkl)

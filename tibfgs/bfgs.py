@@ -13,7 +13,7 @@ FLAG_MAX_FEVAL_MSG = 'Max function evaluations exceeded'
 
 _default_taichi_kwargs = dict(
     arch=ti.gpu,
-    default_fp=ti.float32,
+    default_fp=ti.f64,
     fast_math=False,
     advanced_optimization=False,
     num_compile_threads=32,
@@ -24,7 +24,7 @@ _default_taichi_kwargs = dict(
 
 def init_ti(**kwargs):
     if 'TI_BFGS_INIT' not in os.environ:
-        np.finfo(np.float32)
+        np.finfo(np.float64)
         _default_taichi_kwargs.update(kwargs)
         ti.init(**_default_taichi_kwargs)
         os.environ['TI_BFGS_INIT'] = 'True'
@@ -56,7 +56,7 @@ def minimize(
     set_f(fun, eps=eps)
 
     x0s = ti.field(dtype=VTYPE, shape=NPART)
-    x0_as_dtype = x0.astype(np.float32)
+    x0_as_dtype = x0.astype(np.float64)
     x0s.from_numpy(x0_as_dtype)
 
     minimize_kernel(x0s, gtol=gtol, maxiter=maxiter, maxfeval=maxfeval)

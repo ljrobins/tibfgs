@@ -18,7 +18,7 @@ To use ``tibfgs``, define an objective function as a ``ti.func``, for example th
 .. code-block:: python
 
     @ti.func
-    def ackley(x: ti.math.vec2) -> ti.f32:
+    def ackley(x: ti.math.vec2) -> ti.f64:
         return (
             -20 * ti.exp(-0.2 * ti.sqrt(0.5 * x.norm_sqr()))
             - ti.exp(

@@ -3,12 +3,12 @@ import numpy as np
 
 
 @ti.func
-def rosen(x: ti.math.vec2) -> ti.float32:
+def rosen(x: ti.math.vec2) -> ti.f64:
     return (1.0 - x[0]) ** 2 + 100.0 * (x[1] - x[0] ** 2) ** 2
 
 
 @ti.func
-def ackley(x: ti.math.vec2) -> ti.f32:
+def ackley(x: ti.math.vec2) -> ti.f64:
     return (
         -20 * ti.exp(-0.2 * ti.sqrt(0.5 * x.norm_sqr()))
         - ti.exp(

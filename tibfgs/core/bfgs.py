@@ -5,8 +5,8 @@ from typing import Callable
 N: ti.u8 = int(os.environ['TI_DIM_X'])
 NPART: ti.i32 = int(os.environ['TI_NUM_PARTICLES'])
 
-MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f32)
-VTYPE = ti.types.vector(n=N, dtype=ti.f32)
+MTYPE = ti.types.matrix(n=N, m=N, dtype=ti.f64)
+VTYPE = ti.types.vector(n=N, dtype=ti.f64)
 
 EVAL_COUNTS = ti.field(
     dtype=ti.types.vector(n=2, dtype=ti.i32), shape=NPART
@@ -14,7 +14,7 @@ EVAL_COUNTS = ti.field(
 GVALS = ti.field(dtype=VTYPE, shape=NPART)  # gradient values
 
 res_dict = dict(
-    fun=ti.f32,
+    fun=ti.f64,
     xk=VTYPE,
     x0=VTYPE,
     status=ti.u8,
@@ -44,12 +44,17 @@ FLAG_MAX_FEVAL = ti.cast(5, ti.u8)
 
 @ti.kernel
 def minimize_kernel(
-    x0s: ti.template(), gtol: ti.f32, maxiter: ti.u16, maxfeval: ti.u16
+    x0s: ti.template(), gtol: ti.f64, maxiter: ti.u16, maxfeval: ti.u16
 ) -> int:
+    # ti.loop_config(parallelize=16)
+    current: ti.u32 = 0
     for i in x0s:
         res_field[i] = minimize_bfgs(
             i=i, x0=x0s[i], gtol=gtol, maxiter=maxiter, maxfeval=maxfeval
         )
+        ti.atomic_add(current, 1)
+        print(f'Finished {current}/{x0s.shape[0]}')
+        print(res_field[i].xk - res_field[i].x0)
     return 0
 
 
@@ -69,10 +74,11 @@ def fprime(x: VTYPE) -> VTYPE:
 
 
 @ti.func
-def two_point_gradient(x0: VTYPE, eps: ti.f32) -> VTYPE:
+def two_point_gradient(x0: VTYPE, eps: ti.f64) -> VTYPE:
     g = VTYPE(0.0)
     fx0 = f(x0)
 
+    ti.loop_config(serialize=True)
     for pind in range(N):
         p = VTYPE(0.0)
         p[pind] = eps
@@ -82,7 +88,7 @@ def two_point_gradient(x0: VTYPE, eps: ti.f32) -> VTYPE:
 
 
 @ti.func
-def matnorm(m: MTYPE, ord=ti.math.inf) -> ti.f32:
+def matnorm(m: MTYPE, ord=ti.math.inf) -> ti.f64:
     v = ti.math.nan
 
     if ord == ti.math.inf:
@@ -93,8 +99,8 @@ def matnorm(m: MTYPE, ord=ti.math.inf) -> ti.f32:
 
 
 @ti.func
-def vecnorm(v, ord=2.0) -> ti.f32:
-    n: ti.f32 = 0.0
+def vecnorm(v, ord=2.0) -> ti.f64:
+    n: ti.f64 = 0.0
 
     if ti.math.isinf(ord):
         if ord == ti.math.inf:
@@ -109,13 +115,13 @@ def vecnorm(v, ord=2.0) -> ti.f32:
 
 
 @ti.func
-def phi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
+def phi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f64) -> ti.f64:
     ti.atomic_add(EVAL_COUNTS[i][0], 1)
     return f(xk + s * pk)
 
 
 @ti.func
-def derphi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f32) -> ti.f32:
+def derphi(i: ti.i32, xk: VTYPE, pk: VTYPE, s: ti.f64) -> ti.f64:
     GVALS[i] = fprime(xk + s * pk)
     ti.atomic_add(EVAL_COUNTS[i][1], 1)
     ti.atomic_add(EVAL_COUNTS[i][0], N)
@@ -128,13 +134,13 @@ def line_search_wolfe1(
     xk: VTYPE,
     pk: VTYPE,
     gfk: VTYPE,
-    old_fval: ti.f32,
-    old_old_fval: ti.f32,
-    c1: ti.f32,
-    c2: ti.f32,
-    amin: ti.f32,
-    amax: ti.f32,
-    xtol: ti.f32,
+    old_fval: ti.f64,
+    old_old_fval: ti.f64,
+    c1: ti.f64,
+    c2: ti.f64,
+    amin: ti.f64,
+    amax: ti.f64,
+    xtol: ti.f64,
 ):
     """
     As `scalar_search_wolfe1` but do a line search to direction `pk`
@@ -162,8 +168,6 @@ def line_search_wolfe1(
         Gradient of `f` at the final point
 
     """
-    # FCOUNT[i] = 0
-    # GCOUNT[i] = 0
     EVAL_COUNTS[i] = [0, 0]
 
     derphi0 = ti.math.dot(gfk, pk)
@@ -193,14 +197,14 @@ def scalar_search_wolfe1(
     i: int,
     xk: VTYPE,
     pk: VTYPE,
-    phi0: ti.f32,
-    old_phi0: ti.f32,
-    derphi0: ti.f32,
-    c1: ti.f32,
-    c2: ti.f32,
-    amax: ti.f32,
-    amin: ti.f32,
-    xtol: ti.f32,
+    phi0: ti.f64,
+    old_phi0: ti.f64,
+    derphi0: ti.f64,
+    c1: ti.f64,
+    c2: ti.f64,
+    amax: ti.f64,
+    amin: ti.f64,
+    xtol: ti.f64,
 ):
     """
     Scalar function search for alpha that satisfies strong Wolfe conditions
@@ -235,7 +239,7 @@ def scalar_search_wolfe1(
 
     """
 
-    alpha1: ti.f32 = 0.0
+    alpha1: ti.f64 = 0.0
     if derphi0 != 0:
         alpha1 = ti.min(1.0, 2.02 * (phi0 - old_phi0) / derphi0)
         if alpha1 < 0:
@@ -255,7 +259,7 @@ def scalar_search_wolfe1(
 
 
 @ti.func
-def clip(x: ti.f32, min_v: ti.f32, max_v: ti.f32) -> ti.f32:
+def clip(x: ti.f64, min_v: ti.f64, max_v: ti.f64) -> ti.f64:
     v = x
     if x < min_v:
         v = min_v
@@ -294,29 +298,29 @@ class DCSRCH:
     pk: VTYPE
     # leave all assessment of tolerances/limits to the first call of
     # this object
-    ftol: ti.f32
-    gtol: ti.f32
-    xtol: ti.f32
-    stpmin: ti.f32
-    stpmax: ti.f32
+    ftol: ti.f64
+    gtol: ti.f64
+    xtol: ti.f64
+    stpmin: ti.f64
+    stpmax: ti.f64
     i: ti.u32
 
     # these are initialized to zero
     brackt: ti.u1
-    stage: ti.f32
-    ginit: ti.f32
-    gtest: ti.f32
-    gx: ti.f32
-    gy: ti.f32
-    finit: ti.f32
-    fx: ti.f32
-    fy: ti.f32
-    stx: ti.f32
-    sty: ti.f32
-    stmin: ti.f32
-    stmax: ti.f32
-    width: ti.f32
-    width1: ti.f32
+    stage: ti.f64
+    ginit: ti.f64
+    gtest: ti.f64
+    gx: ti.f64
+    gy: ti.f64
+    finit: ti.f64
+    fx: ti.f64
+    fy: ti.f64
+    stx: ti.f64
+    sty: ti.f64
+    stmin: ti.f64
+    stmax: ti.f64
+    width: ti.f64
+    width1: ti.f64
 
     @ti.func
     def call(self, alpha1, phi0, derphi0, maxiter):
@@ -353,14 +357,14 @@ class DCSRCH:
         input arguments.
         """
 
-        phi1: ti.f32 = phi0
-        derphi1: ti.f32 = derphi0
+        phi1: ti.f64 = phi0
+        derphi1: ti.f64 = derphi0
 
         task: ti.u8 = TASK_START
         inf_stp = False
         max_iter_hit = False
         something_else = False
-        stp: ti.f32 = 0.0
+        stp: ti.f64 = 0.0
 
         # print(self.xk, self.pk, self.ftol, self.gtol, self.xtol, self.stpmin, self.stpmax, self.i, alpha1, phi0, derphi0, maxiter)
 
@@ -591,18 +595,18 @@ def sign(x):
 
 @ti.func
 def dcstep(
-    stx: ti.f32,
-    fx: ti.f32,
-    dx: ti.f32,
-    sty: ti.f32,
-    fy: ti.f32,
-    dy: ti.f32,
-    stp: ti.f32,
-    fp: ti.f32,
-    dp: ti.f32,
+    stx: ti.f64,
+    fx: ti.f64,
+    dx: ti.f64,
+    sty: ti.f64,
+    fy: ti.f64,
+    dy: ti.f64,
+    stp: ti.f64,
+    fp: ti.f64,
+    dp: ti.f64,
     brackt: ti.u1,
-    stpmin: ti.f32,
-    stpmax: ti.f32,
+    stpmin: ti.f64,
+    stpmax: ti.f64,
 ):
     sgn_dp = sign(dp)
     sgn_dx = sign(dx)
@@ -756,9 +760,9 @@ def dcstep(
 def minimize_bfgs(
     i: ti.i32,
     x0: VTYPE,
-    gtol: ti.f32 = 1e-4,
-    norm: ti.f32 = ti.math.inf,
-    eps: ti.f32 = 1e-6,
+    gtol: ti.f64 = 1e-4,
+    norm: ti.f64 = ti.math.inf,
+    eps: ti.f64 = 1e-6,
     maxiter: ti.u16 = 100,
     maxfeval: ti.u16 = 1000,
     xrtol=1e-6,
@@ -768,7 +772,7 @@ def minimize_bfgs(
     old_fval = f(x0)
     gfk = fprime(x0)
 
-    eye = ti.Matrix.identity(dt=ti.f32, n=N)
+    eye = ti.Matrix.identity(dt=ti.f64, n=N)
     Hk = eye
 
     # Sets the initial step guess to dx ~ 1
@@ -811,6 +815,7 @@ def minimize_bfgs(
 
         if task != TASK_CONVERGENCE:
             # Line search failed to find a better solution.
+            print('MAYDAY: LINE SEARCH FAILED TO FIND A BETTER SOLUTION')
             warnflag = FLAG_PRECISION_LOSS
             break
 
@@ -836,6 +841,7 @@ def minimize_bfgs(
         if ti.math.isinf(old_fval):
             # We correctly found +-Inf as optimal value, or something went
             # wrong.
+            print('MAYDAY: FOUND AN INF')
             warnflag = FLAG_PRECISION_LOSS
             break
 
@@ -843,7 +849,7 @@ def minimize_bfgs(
         # this was handled in numeric, let it remains for more safety
         # Cryptic comment above is preserved for posterity. Future reader:
         # consider change to condition below proposed in gh-1261/gh-17345.
-        rhok: ti.f32 = 0.0  # to be overwritten
+        rhok: ti.f64 = 0.0  # to be overwritten
         if rhok_inv == 0.0:
             rhok = 1000.0
             print('Divide-by-zero encountered: rhok assumed large')

@@ -136,6 +136,7 @@ def minimize_bfgs(
             #     print(alpha_k, fc, gc, old_fval, old_old_fval, gfkp1)
         except _LineSearchError:
             # Line search failed to find a better solution.
+            print('MAYDAY: LINE SEARCH FAILED TO FIND A BETTER SOLUTION')
             warnflag = 2
             break
 
@@ -166,6 +167,7 @@ def minimize_bfgs(
         if not np.isfinite(old_fval):
             # We correctly found +-Inf as optimal value, or something went
             # wrong.
+            print('MAYDAY: INFINITE OLD_FVAL')
             warnflag = 2
             break
 
